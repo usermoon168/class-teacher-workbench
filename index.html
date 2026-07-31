@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#4f46e5">
+  <title>班主任工作台</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部状态栏 -->
+    <header class="app-header" id="appHeader">
+      <div class="header-left">
+        <button class="menu-toggle" onclick="toggleSidebar()">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+        </button>
+        <div class="class-selector" onclick="showClassSwitcher()">
+          <span class="class-icon">🏫</span>
+          <span class="class-name" id="currentClassName">八年级10班</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="datetime" id="currentDateTime"></div>
+      </div>
+    </header>
+
+    <!-- 侧边导航 -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">📚</div>
+        <div class="sidebar-title">班主任工作台</div>
+        <div class="sidebar-subtitle" id="sidebarClassName">八年级10班</div>
+      </div>
+      <ul class="nav-list" id="navList">
+        <li class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span class="nav-label">仪表盘</span></li>
+        <li class="nav-item" data-page="students"><span class="nav-icon">👥</span><span class="nav-label">学生管理</span></li>
+        <li class="nav-item" data-page="grades"><span class="nav-icon">📈</span><span class="nav-label">成绩分析</span></li>
+        <li class="nav-item" data-page="discipline"><span class="nav-icon">⚠️</span><span class="nav-label">违纪统计</span></li>
+        <li class="nav-item" data-page="homework"><span class="nav-icon">📝</span><span class="nav-label">作业管理</span></li>
+        <li class="nav-item" data-page="leave"><span class="nav-icon">📋</span><span class="nav-label">请假管理</span></li>
+        <li class="nav-item" data-page="worklog"><span class="nav-icon">📅</span><span class="nav-label">工作留痕</span></li>
+        <li class="nav-item" data-page="talks"><span class="nav-icon">💬</span><span class="nav-label">谈话记录</span></li>
+        <li class="nav-item" data-page="seating"><span class="nav-icon">🪑</span><span class="nav-label">座位安排</span></li>
+        <li class="nav-item" data-page="communication"><span class="nav-icon">📞</span><span class="nav-label">家校沟通</span></li>
+        <li class="nav-item" data-page="activities"><span class="nav-icon">🎉</span><span class="nav-label">班级活动</span></li>
+        <li class="nav-item" data-page="todo"><span class="nav-icon">✅</span><span class="nav-label">待办备忘</span></li>
+      </ul>
+      <div class="sidebar-footer">
+        <button class="btn-settings" onclick="showSettings()">⚙️ 设置</button>
+      </div>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <!-- 主内容区 -->
+    <main class="main-content" id="mainContent">
+      <!-- 动态内容 -->
+    </main>
+
+    <!-- 底部快捷栏 -->
+    <footer class="bottom-nav" id="bottomNav">
+      <div class="bottom-nav-item" onclick="navigateTo('dashboard')">
+        <span class="bn-icon">📊</span><span class="bn-label">仪表盘</span>
+      </div>
+      <div class="bottom-nav-item" onclick="navigateTo('students')">
+        <span class="bn-icon">👥</span><span class="bn-label">学生</span>
+      </div>
+      <div class="bottom-nav-item bn-center" onclick="showQuickActions()">
+        <div class="bn-fab">+</div>
+      </div>
+      <div class="bottom-nav-item" onclick="navigateTo('todo')">
+        <span class="bn-icon">✅</span><span class="bn-label">待办</span>
+      </div>
+      <div class="bottom-nav-item" onclick="showSettings()">
+        <span class="bn-icon">⚙️</span><span class="bn-label">我的</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 模态框容器 -->
+  <div class="modal-container" id="modalContainer"></div>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 快捷操作面板 -->
+  <div class="action-sheet" id="actionSheet">
+    <div class="action-sheet-overlay" onclick="closeActionSheet()"></div>
+    <div class="action-sheet-content">
+      <div class="action-sheet-header">
+        <span>快捷操作</span>
+        <button onclick="closeActionSheet()">✕</button>
+      </div>
+      <div class="action-sheet-grid">
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('grades'); setTimeout(()=>showGradeEntryModal(),300)">
+          <div class="action-icon">📝</div><span>录入成绩</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('discipline'); setTimeout(()=>showDisciplineModal(),300)">
+          <div class="action-icon">⚠️</div><span>记录违纪</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('leave'); setTimeout(()=>showLeaveModal(),300)">
+          <div class="action-icon">📋</div><span>请假登记</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('homework'); setTimeout(()=>showHomeworkModal(),300)">
+          <div class="action-icon">📚</div><span>布置作业</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('worklog'); setTimeout(()=>showWorklogModal(),300)">
+          <div class="action-icon">📅</div><span>工作留痕</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('talks'); setTimeout(()=>showTalkModal(),300)">
+          <div class="action-icon">💬</div><span>谈话记录</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('todo'); setTimeout(()=>showTodoModal(),300)">
+          <div class="action-icon">✅</div><span>添加待办</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('students'); setTimeout(()=>showStudentModal(),300)">
+          <div class="action-icon">👤</div><span>添加学生</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="db.js"></script>
+  <script src="utils.js"></script>
+  <script src="pages/dashboard.js"></script>
+  <script src="pages/students.js"></script>
+  <script src="pages/grades.js"></script>
+  <script src="pages/discipline.js"></script>
+  <script src="pages/homework.js"></script>
+  <script src="pages/leave.js"></script>
+  <script src="pages/worklog.js"></script>
+  <script src="pages/talks.js"></script>
+  <script src="pages/seating.js"></script>
+  <script src="pages/communication.js"></script>
+  <script src="pages/activities.js"></script>
+  <script src="pages/todo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
