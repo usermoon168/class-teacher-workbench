@@ -17,6 +17,7 @@ const GradesPage = {
       <div class="toolbar">
         <button class="btn btn-primary btn-sm" onclick="showExamModal()">+ 新建考试</button>
         <button class="btn btn-outline btn-sm" onclick="showGradeEntryModal()">📝 录入成绩</button>
+        <button class="btn btn-outline btn-sm" onclick="showGradeImportModal()">📥 批量导入</button>
         <button class="btn btn-outline btn-sm" onclick="GradesPage.exportGrades()">📤 导出</button>
       </div>
     `;
@@ -618,4 +619,304 @@ function saveGrades() {
   Utils.closeModal();
   GradesPage.render();
   Utils.toast(`已保存 ${count} 名学生成绩`, 'success');
+}
+
+// ========== 批量导入成绩 ==========
+let _importedGrades = []; // 临时存储解析后的成绩数据
+
+function showGradeImportModal() {
+  const exams = DB.getByClass('exams');
+  if (exams.length === 0) {
+    Utils.toast('请先创建考试', 'warning');
+    return;
+  }
+
+  let html = `
+    <div class="form-group">
+      <label class="form-label">导入到哪次考试 *</label>
+      <select class="form-select" id="importExamId">
+        ${exams.map(e => `<option value="${e.id}" ${e.id === GradesPage.currentExamId ? 'selected' : ''}>${e.name} (${e.date})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">CSV 文件</label>
+      <div class="file-upload" onclick="document.getElementById('gradeImportFile').click()">
+        <div class="file-upload-icon">📁</div>
+        <div id="importFileName">点击选择 CSV 文件</div>
+      </div>
+      <input type="file" id="gradeImportFile" accept=".csv,.txt" style="display:none;" onchange="parseGradeImport(event)">
+    </div>
+    <div id="importPreviewArea"></div>
+    <div style="margin-top:8px;">
+      <button class="btn btn-outline btn-block btn-sm" onclick="downloadGradeTemplate()">📋 下载导入模板</button>
+    </div>
+    <div style="font-size:12px;color:var(--gray-500);margin-top:10px;line-height:1.6;">
+      <strong>格式说明：</strong><br>
+      • 第一行为表头，需包含「姓名」和各科目名称<br>
+      • 后续每行一个学生的成绩<br>
+      • 支持学号列（可选），用于精确匹配学生<br>
+      • 留空的科目计 0 分<br>
+      • <strong>已存在的成绩会被覆盖</strong>
+    </div>
+  `;
+
+  Utils.showModal('📥 批量导入成绩', html, `
+    <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
+    <button class="btn btn-primary" style="flex:1;" onclick="confirmGradeImport()" id="confirmImportBtn" disabled>确认导入</button>
+  `);
+}
+
+function downloadGradeTemplate() {
+  const exams = DB.getByClass('exams');
+  const examId = document.getElementById('importExamId')?.value || GradesPage.currentExamId;
+  const exam = exams.find(e => e.id === examId);
+  const subjects = exam ? exam.subjects : ['语文', '数学', '英语', '物理', '政治', '历史', '地理', '生物'];
+  const students = DB.getByClass('students');
+
+  // 模板含表头 + 示例学生（姓名+学号预填，成绩留空）
+  let csv = '姓名,学号,' + subjects.join(',') + '\n';
+  students.slice(0, 5).forEach(s => {
+    csv += `${s.name},${s.studentNo || ''},${subjects.map(() => '').join(',')}\n`;
+  });
+  csv += `张三,2024001,${subjects.map((_, i) => 80 + i).join(',')}\n`;
+  csv += `李四,2024002,${subjects.map((_, i) => 75 + i).join(',')}\n`;
+
+  Utils.downloadFile(`成绩导入模板_${exam ? exam.name : ''}.csv`, '\ufeff' + csv, 'text/csv');
+  Utils.toast('模板已下载', 'success');
+}
+
+function parseGradeImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  document.getElementById('importFileName').textContent = file.name;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const rows = Utils.parseCSV(e.target.result);
+      if (rows.length === 0) {
+        Utils.toast('文件为空或格式错误', 'error');
+        return;
+      }
+
+      // 识别科目列
+      const headers = Object.keys(rows[0]);
+      const nameKey = headers.find(h => h.includes('姓名') || h.toLowerCase() === 'name');
+      const noKey = headers.find(h => h.includes('学号') || h.toLowerCase().includes('no'));
+
+      if (!nameKey) {
+        Utils.toast('未找到「姓名」列，请检查文件格式', 'error');
+        return;
+      }
+
+      const exams = DB.getByClass('exams');
+      const examId = document.getElementById('importExamId').value;
+      const exam = exams.find(e => e.id === examId);
+      if (!exam) {
+        Utils.toast('请选择考试', 'error');
+        return;
+      }
+
+      // 识别科目列：优先精确匹配考试科目，其次取非姓名/学号的数字列
+      const subjectCols = [];
+      exam.subjects.forEach(subj => {
+        const col = headers.find(h => h.trim() === subj.trim());
+        if (col) subjectCols.push({ subject: subj, col: col });
+      });
+
+      // 如果精确匹配不够，尝试模糊匹配
+      if (subjectCols.length === 0) {
+        headers.forEach(h => {
+          if (h !== nameKey && h !== noKey && !h.includes('总分') && !h.includes('排名') && !h.includes('平均')) {
+            subjectCols.push({ subject: h.trim(), col: h });
+          }
+        });
+      }
+
+      if (subjectCols.length === 0) {
+        Utils.toast('未找到科目列，请确保表头包含科目名称', 'error');
+        return;
+      }
+
+      const students = DB.getByClass('students');
+      const parsed = [];
+      const unmatched = [];
+
+      rows.forEach((row, idx) => {
+        const name = (row[nameKey] || '').trim();
+        if (!name) return;
+
+        const studentNo = noKey ? (row[noKey] || '').trim() : '';
+
+        // 匹配学生：优先学号，其次姓名
+        let student = null;
+        if (studentNo) {
+          student = students.find(s => s.studentNo === studentNo);
+        }
+        if (!student) {
+          student = students.find(s => s.name === name);
+        }
+
+        if (!student) {
+          unmatched.push({ row: idx + 2, name: name, reason: '未找到匹配学生' });
+          return;
+        }
+
+        // 解析各科分数
+        const scores = {};
+        let total = 0;
+        let hasScore = false;
+        subjectCols.forEach(sc => {
+          const rawVal = (row[sc.col] || '').trim();
+          const val = rawVal === '' ? 0 : parseFloat(rawVal);
+          if (isNaN(val)) {
+            scores[sc.subject] = 0;
+          } else {
+            scores[sc.subject] = val;
+            if (rawVal !== '') hasScore = true;
+            total += val;
+          }
+        });
+
+        if (!hasScore) return;
+
+        parsed.push({
+          studentId: student.id,
+          studentName: student.name,
+          studentNo: student.studentNo,
+          scores: scores,
+          total: total,
+          average: (total / subjectCols.length).toFixed(1),
+          subjects: subjectCols.map(sc => sc.subject)
+        });
+      });
+
+      _importedGrades = parsed;
+
+      // 渲染预览
+      let previewHtml = '';
+      if (parsed.length > 0) {
+        const subjList = parsed[0].subjects;
+        previewHtml += `
+          <div style="margin-top:12px;padding:10px;background:var(--primary-bg);border-radius:8px;font-size:13px;">
+            ✅ 解析成功：<strong>${parsed.length}</strong> 条成绩记录<br>
+            📚 科目：${subjList.join('、')}
+          </div>
+        `;
+
+        // 未匹配学生
+        if (unmatched.length > 0) {
+          previewHtml += `
+            <div style="margin-top:8px;padding:10px;background:#fee2e2;border-radius:8px;font-size:12px;">
+              ⚠️ ${unmatched.length} 行未匹配到学生（已跳过）：<br>
+              ${unmatched.slice(0, 5).map(u => `第${u.row}行 ${u.name}`).join('、')}${unmatched.length > 5 ? '...' : ''}
+            </div>
+          `;
+        }
+
+        // 数据预览表
+        previewHtml += `
+          <div style="margin-top:12px;">
+            <div style="font-weight:600;font-size:13px;margin-bottom:6px;">📋 数据预览（前5条）</div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead><tr><th>姓名</th>
+        `;
+        subjList.forEach(s => previewHtml += `<th>${s}</th>`);
+        previewHtml += `<th>总分</th></tr></thead><tbody>`;
+        parsed.slice(0, 5).forEach(p => {
+          previewHtml += `<tr><td>${p.studentName}</td>`;
+          subjList.forEach(s => {
+            const score = p.scores[s];
+            const color = score >= 80 ? 'var(--success)' : score >= 60 ? '' : 'var(--danger)';
+            previewHtml += `<td style="color:${color};font-weight:${score >= 80 || score < 60 ? '600' : '400'};">${score}</td>`;
+          });
+          previewHtml += `<td style="font-weight:700;">${p.total}</td></tr>`;
+        });
+        previewHtml += '</tbody></table></div>';
+        if (parsed.length > 5) {
+          previewHtml += `<div style="font-size:12px;color:var(--gray-500);margin-top:4px;text-align:center;">还有 ${parsed.length - 5} 条未显示...</div>`;
+        }
+        previewHtml += '</div>';
+      } else {
+        previewHtml = `
+          <div style="margin-top:12px;padding:10px;background:#fee2e2;border-radius:8px;font-size:13px;">
+            ❌ 未解析到有效成绩数据<br>
+            ${unmatched.length > 0 ? `所有 ${unmatched.length} 行均未匹配到学生，请检查姓名或学号是否与花名册一致` : '请检查文件格式'}
+          </div>
+        `;
+      }
+
+      document.getElementById('importPreviewArea').innerHTML = previewHtml;
+
+      // 启用/禁用导入按钮
+      const btn = document.getElementById('confirmImportBtn');
+      if (btn) {
+        btn.disabled = parsed.length === 0;
+        btn.style.opacity = parsed.length === 0 ? '0.5' : '1';
+      }
+
+      if (parsed.length > 0) {
+        Utils.toast(`解析成功，${parsed.length} 条成绩待导入`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      Utils.toast('文件解析失败：' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function confirmGradeImport() {
+  if (_importedGrades.length === 0) {
+    Utils.toast('没有可导入的数据', 'error');
+    return;
+  }
+
+  const examId = document.getElementById('importExamId').value;
+  const exam = (DB.get('exams') || []).find(e => e.id === examId);
+  if (!exam) {
+    Utils.toast('考试信息异常', 'error');
+    return;
+  }
+
+  const allGrades = DB.get('grades') || [];
+  let updated = 0;
+  let added = 0;
+
+  _importedGrades.forEach(g => {
+    const gradeData = {
+      examId: examId,
+      studentId: g.studentId,
+      studentName: g.studentName,
+      studentNo: g.studentNo,
+      scores: g.scores,
+      total: g.total,
+      average: g.average,
+      rank: 0
+    };
+
+    const existing = allGrades.find(ag => ag.examId === examId && ag.studentId === g.studentId);
+    if (existing) {
+      DB.update('grades', existing.id, gradeData);
+      updated++;
+    } else {
+      DB.add('grades', gradeData);
+      added++;
+    }
+  });
+
+  // 重新排名
+  const examGrades = (DB.get('grades') || []).filter(g => g.examId === examId);
+  examGrades.sort((a, b) => b.total - a.total);
+  examGrades.forEach((g, i) => {
+    DB.update('grades', g.id, { rank: i + 1 });
+  });
+
+  _importedGrades = [];
+  Utils.closeModal();
+  GradesPage.currentExamId = examId;
+  GradesPage.render();
+  Utils.toast(`导入完成！新增 ${added} 条，更新 ${updated} 条`, 'success');
 }
