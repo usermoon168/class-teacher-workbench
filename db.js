@@ -11,12 +11,13 @@ const DB = {
   init() {
     if (!this.get('classes')) {
       this.set('classes', [
+        { id: 'class_qi_10', name: '七年级10班', grade: '七年级', classNo: '10', studentCount: 0 },
         { id: 'class_1', name: '八年级10班', grade: '八年级', classNo: '10', studentCount: 0 },
         { id: 'class_2', name: '七年级3班', grade: '七年级', classNo: '3', studentCount: 0 },
         { id: 'class_3', name: '九年级5班', grade: '九年级', classNo: '5', studentCount: 0 },
       ]);
     }
-    this.currentClassId = this.get('currentClassId') || 'class_1';
+    this.currentClassId = this.get('currentClassId') || 'class_qi_10';
 
     // 初始化各模块数据
     const modules = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
@@ -26,9 +27,16 @@ const DB = {
       if (!this.get(m)) this.set(m, []);
     });
 
-    // 如果当前班级没有学生，插入示例数据
-    const students = this.get('students');
-    const class1Students = students.filter(s => s.classId === 'class_1');
+    // 如果七年级10班没有学生，插入真实数据
+    let students = this.get('students') || [];
+    let qi10Students = students.filter(s => s.classId === 'class_qi_10');
+    if (qi10Students.length === 0) {
+      this._insertRealData();
+    }
+
+    // 如果八年级10班没有学生，插入示例数据
+    students = this.get('students') || [];
+    let class1Students = students.filter(s => s.classId === 'class_1');
     if (class1Students.length === 0) {
       this._insertSampleData();
     }
@@ -144,7 +152,145 @@ const DB = {
     });
   },
 
-  // 插入示例数据
+  // 插入七年级10班真实数据
+  _insertRealData() {
+    const classId = 'class_qi_10';
+    // 真实学生花名册（七年级10班，55人）
+    const rawStudents = [
+      [1,"陈秀萍"],[2,"李芷馨"],[3,"李泽镇"],[4,"李梦妮"],[5,"庄静怡"],
+      [6,"汪涵怡"],[7,"李建翊"],[8,"李玉欣"],[9,"李奕敏"],[10,"李晓彤"],
+      [11,"李晞彤"],[12,"李子均"],[13,"陈思菲"],[14,"林宇晞"],[15,"蔡沁雨"],
+      [16,"郭雅柔"],[17,"蔡楚烨"],[18,"陈连源"],[19,"陈钰涵"],[20,"范宝萱"],
+      [21,"蔡梦丽"],[22,"蔡思梅"],[23,"欧依涵"],[24,"范诗敏"],[25,"林李雪钡"],
+      [26,"范嘉煜"],[27,"林佳恩"],[28,"吴舒芹"],[29,"李云洲"],[30,"刘炫烨"],
+      [31,"魏妍曦"],[32,"陈佩媛"],[33,"蔡书轩"],[34,"许盟睿"],[35,"陈泽洋"],
+      [36,"蔡智威"],[37,"蔡一嘉"],[38,"李键楠"],[39,"李彦烨"],[40,"许佳俊"],
+      [41,"刘海汛"],[42,"黄建桓"],[43,"许晓端"],[44,"李钡淇"],[45,"蔡金铭"],
+      [46,"朱春燕"],[47,"杨裕鑫"],[48,"梁航维"],[49,"蔡烨川"],[50,"李晓橦"],
+      [51,"范锦辉"],[52,"蔡明璋"],[53,"杨松权"],[54,"范晓楦"],[55,"李永灿"]
+    ];
+
+    const students = rawStudents.map(([seatNo, name]) => ({
+      id: 'stu_' + seatNo,
+      classId: classId,
+      name: name,
+      studentNo: '2024' + String(seatNo).padStart(3, '0'),
+      seatNo: String(seatNo),
+      gender: '',
+      age: '',
+      birthday: '',
+      phone: '',
+      parentName: '',
+      parentPhone: '',
+      address: '',
+      dorm: '走读',
+      note: '',
+      role: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    // 追加到现有学生数据（避免覆盖其他班级）
+    const existingStudents = this.get('students') || [];
+    this.set('students', existingStudents.concat(students));
+
+    // 考试：七年级期末统考
+    const exam = {
+      id: 'exam_qi_final',
+      classId: classId,
+      name: '七年级期末统考',
+      date: '2026-07-01',
+      subjects: ['语文', '数学', '英语', '政治', '历史', '生物', '地理'],
+      fullScore: 100,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const existingExams = this.get('exams') || [];
+    this.set('exams', existingExams.concat([exam]));
+
+    // 成绩数据（七年级期末统考）
+    // [座号, 语文, 数学, 英语, 政治, 历史, 生物, 地理]  null=缺考
+    const rawGrades = [
+      [1,77,78,73,71,56,63,56],[2,82,72,102,81,70,72,85],[3,77,88,43,67,62,56,72],
+      [4,75,70,61,83,26,36,65],[5,76,71,68,68,48,65,33],[6,74,43,51,85,65,52,76],
+      [7,64,60,57,68,31,35,48],[8,80,78,50,72,54,42,52],[9,82,76,53,74,65,73,89],
+      [10,64,20,41,59,33,29,28],[11,75,75,38,63,40,39,59],[12,53,78,48,72,42,69,62],
+      [13,58,78,47,62,39,55,65],[14,77,63,61,74,61,69,64],[15,70,56,61,68,60,52,63],
+      [16,53,44,39,61,26,36,39],[17,5,56,26,12,18,16,18],[18,76,56,50,62,38,49,75],
+      [19,48,60,42,82,49,60,68],[20,83,87,58,67,44,88,75],[21,69,45,53,74,53,37,59],
+      [22,64,74,36,71,46,42,65],[23,83,82,32,72,53,77,56],[24,77,71,58,77,47,36,73],
+      [25,45,54,24,41,14,37,51],[26,78,71,43,69,78,95,84],[27,83,46,47,90,68,57,72],
+      [28,64,61,66,78,51,43,60],[29,50,72,40,66,72,82,80],[30,48,36,34,56,null,24,16],
+      [31,67,29,50,54,40,36,52],[32,66,53,34,83,18,32,39],[33,33,26,25,45,14,25,26],
+      [34,43,34,21,55,32,25,37],[35,46,8,32,55,38,18,48],[36,10,6,26,42,18,14,10],
+      [37,67,43,24,60,41,33,28],[38,83,48,40,73,56,38,69],[39,49,47,18,62,58,62,68],
+      [40,66,71,20,67,26,37,51],[41,64,58,43,53,45,46,61],[42,46,27,17,48,27,19,27],
+      [43,60,70,33,75,22,48,46],[44,48,27,42,60,26,32,53],[45,40,25,21,68,14,21,40],
+      [46,58,23,36,65,49,39,50],[47,50,33,36,76,38,53,48],[48,34,36,26,56,31,45,59],
+      [49,43,44,27,64,30,35,36],[50,50,6,28,49,20,32,24],[51,17,23,22,47,18,39,10],
+      [52,25,9,28,42,16,12,12],[53,32,23,29,34,16,29,22],[54,30,21,27,55,14,14,28],
+      [55,null,6,21,24,12,12,20]
+    ];
+
+    const subjects = ['语文', '数学', '英语', '政治', '历史', '生物', '地理'];
+    const grades = rawGrades.map(([seatNo, ...scores]) => {
+      const student = students.find(s => s.seatNo === String(seatNo));
+      const scoreObj = {};
+      const absent = [];
+      let total = 0;
+      let validCount = 0;
+      scores.forEach((sc, i) => {
+        if (sc === null) {
+          scoreObj[subjects[i]] = 0;
+          absent.push(subjects[i]);
+        } else {
+          scoreObj[subjects[i]] = sc;
+          total += sc;
+          validCount++;
+        }
+      });
+      return {
+        id: 'grade_' + seatNo,
+        classId: classId,
+        examId: exam.id,
+        studentId: student.id,
+        studentName: student.name,
+        studentNo: student.studentNo,
+        seatNo: String(seatNo),
+        scores: scoreObj,
+        absentSubjects: absent,
+        total: total,
+        average: validCount > 0 ? (total / validCount).toFixed(1) : '0',
+        rank: 0,
+        schoolRank: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    });
+
+    // 按总分排名
+    grades.sort((a, b) => b.total - a.total);
+    grades.forEach((g, i) => g.rank = i + 1);
+    const existingGrades = this.get('grades') || [];
+    this.set('grades', existingGrades.concat(grades));
+
+    // 座位表（按座号排列）
+    const existingSeating = this.get('seating') || [];
+    this.set('seating', existingSeating.concat([{
+      id: 'seating_qi_10',
+      classId: classId,
+      rows: 8,
+      cols: 7,
+      layout: students.map((s, i) => ({
+        row: Math.floor(i / 7) + 1,
+        col: (i % 7) + 1,
+        studentId: s.id,
+        studentName: s.name
+      })),
+      updatedAt: new Date().toISOString()
+    }]));
+  },
+
+  // 插入示例数据（八年级10班）
   _insertSampleData() {
     const sampleNames = [
       '张明轩', '李思琪', '王子涵', '陈雨桐', '刘子航', '杨欣怡', '赵浩然', '黄诗涵',
@@ -178,7 +324,9 @@ const DB = {
       });
     });
 
-    this.set('students', students);
+    // 追加到现有学生数据（避免覆盖其他班级）
+    const existingStudents = this.get('students') || [];
+    this.set('students', existingStudents.concat(students));
 
     // 插入示例违纪数据
     const disciplineTypes = ['迟到', '早退', '旷课', '课堂违纪', '仪容仪表', '手机违规'];
@@ -249,7 +397,8 @@ const DB = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }];
-    this.set('exams', exams);
+    const existingExams2 = this.get('exams') || [];
+    this.set('exams', existingExams2.concat(exams));
 
     // 插入示例成绩
     const grades = [];
@@ -280,7 +429,8 @@ const DB = {
     // 排名
     grades.sort((a, b) => b.total - a.total);
     grades.forEach((g, i) => g.rank = i + 1);
-    this.set('grades', grades);
+    const existingGrades2 = this.get('grades') || [];
+    this.set('grades', existingGrades2.concat(grades));
 
     // 插入示例作业
     const homework = [{
@@ -498,7 +648,8 @@ const DB = {
     this.set('reminders', reminders);
 
     // 座位表
-    this.set('seating', [{
+    const existingSeating2 = this.get('seating') || [];
+    this.set('seating', existingSeating2.concat([{
       id: 'seating_1',
       classId: 'class_1',
       rows: 6,
@@ -510,6 +661,6 @@ const DB = {
         studentName: s.name
       })),
       updatedAt: new Date().toISOString()
-    }]);
+    }]));
   }
 };
