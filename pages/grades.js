@@ -140,11 +140,16 @@ const GradesPage = {
       html += '<th>总分</th><th>均分</th></tr></thead><tbody>';
       sortedGrades.forEach(g => {
         const rankClass = g.rank <= 5 ? 'text-success' : g.rank <= 15 ? '' : g.rank >= grades.length - 4 ? 'text-danger' : '';
+        const absentSet = new Set(g.absentSubjects || []);
         html += `<tr onclick="StudentsPage.showProfile('${g.studentId}')"><td class="${rankClass}" style="font-weight:700;">${g.rank <= 3 ? ['🥇','🥈','🥉'][g.rank-1] : g.rank}</td><td>${g.studentName}</td>`;
         exam.subjects.forEach(s => {
-          const score = g.scores[s] || 0;
-          const color = score >= 80 ? 'var(--success)' : score >= 60 ? '' : 'var(--danger)';
-          html += `<td style="color:${color};font-weight:${score >= 80 || score < 60 ? '600' : '400'};">${score}</td>`;
+          if (absentSet.has(s)) {
+            html += `<td style="color:var(--gray-400);font-style:italic;">缺考</td>`;
+          } else {
+            const score = g.scores[s] || 0;
+            const color = score >= 80 ? 'var(--success)' : score >= 60 ? '' : 'var(--danger)';
+            html += `<td style="color:${color};font-weight:${score >= 80 || score < 60 ? '600' : '400'};">${score}</td>`;
+          }
         });
         html += `<td style="font-weight:700;">${g.total}</td><td>${g.average}</td></tr>`;
       });
