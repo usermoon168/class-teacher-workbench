@@ -22,7 +22,8 @@ const DB = {
     // 初始化各模块数据
     const modules = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
-      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders'];
+      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
     modules.forEach(m => {
       if (!this.get(m)) this.set(m, []);
     });
@@ -128,7 +129,8 @@ const DB = {
     const result = {};
     const keys = ['classes', 'students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
-      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders'];
+      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
     keys.forEach(k => result[k] = this.get(k));
     return result;
   },
@@ -144,7 +146,8 @@ const DB = {
   clearClassData(classId) {
     const keys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
-      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders'];
+      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
     keys.forEach(k => {
       const data = this.get(k) || [];
       const filtered = data.filter(item => item.classId !== classId);
