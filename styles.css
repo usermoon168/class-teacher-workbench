@@ -1568,3 +1568,200 @@ hidden { display: none !important; }
   border-radius: 50%;
   margin-right: 4px;
 }
+
+/* ========== 考勤管理 ========== */
+.attendance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.attendance-student {
+  padding: 10px 6px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+  user-select: none;
+}
+
+.attendance-student:active {
+  transform: scale(0.95);
+}
+
+.attendance-student .att-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.attendance-student .att-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.attendance-student .att-status {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.attendance-student .att-seat {
+  font-size: 10px;
+  color: var(--gray-400);
+  margin-top: 2px;
+}
+
+.att-success {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.att-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.att-info {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.att-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+/* ========== 数据表格 ========== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  background: var(--gray-50);
+  padding: 8px 6px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--gray-600);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 8px 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ========== 随机点名 ========== */
+.random-name-display {
+  padding: 30px 10px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.random-name-text {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--primary);
+  transition: color 0.1s;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+}
+
+.random-name-hint {
+  font-size: 14px;
+  color: var(--gray-400);
+  margin-top: 12px;
+}
+
+/* ========== 倒计时卡片 ========== */
+.countdown-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--primary);
+  transition: all 0.2s;
+}
+
+.countdown-card.urgent {
+  border-left-color: var(--danger);
+}
+
+.countdown-card.expired {
+  opacity: 0.55;
+  border-left-color: var(--gray-300);
+}
+
+.countdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.countdown-body {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.countdown-number {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.countdown-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.countdown-date {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 4px;
+}
+
+.countdown-note {
+  font-size: 12px;
+  color: var(--gray-600);
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: var(--gray-50);
+  border-radius: var(--radius-sm);
+}
+
+/* ========== 家长会报告 ========== */
+.meeting-report-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ========== 作业学生档案 ========== */
+.homework-student-profile {
+  padding: 14px;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+}
