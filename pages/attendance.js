@@ -44,7 +44,8 @@ const AttendancePage = {
       <div class="segment-control">
         <div class="segment-item ${this.currentTab === 'today' ? 'active' : ''}" onclick="AttendancePage.switchTab('today')">📝 今日考勤</div>
         <div class="segment-item ${this.currentTab === 'history' ? 'active' : ''}" onclick="AttendancePage.switchTab('history')">📅 历史记录</div>
-        <div class="segment-item ${this.currentTab === 'monthly' ? 'active' : ''}" onclick="AttendancePage.switchTab('monthly')">📊 月度报表</div>
+        <div class="segment-item ${this.currentTab === 'weekly' ? 'active' : ''}" onclick="AttendancePage.switchTab('weekly')">📊 周汇总</div>
+        <div class="segment-item ${this.currentTab === 'monthly' ? 'active' : ''}" onclick="AttendancePage.switchTab('monthly')">📈 月度报表</div>
       </div>
     `;
 
@@ -52,6 +53,8 @@ const AttendancePage = {
       html += this.renderToday(students, todayRecord);
     } else if (this.currentTab === 'history') {
       html += this.renderHistory(attendance);
+    } else if (this.currentTab === 'weekly') {
+      html += this.renderWeekly(attendance, students);
     } else {
       html += this.renderMonthly(attendance, students);
     }
@@ -100,6 +103,218 @@ const AttendancePage = {
     `;
 
     return html;
+  },
+
+  // 周汇总
+  renderWeekly(attendance, students) {
+    const weekRange = Utils.getWeekRange();
+    const weekAttendance = attendance.filter(a => a.date >= weekRange.start && a.date <= weekRange.end);
+
+    let html = `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📊 本周考勤汇总</div>
+          <div style="font-size:13px;color:var(--gray-500);">${weekRange.start} ~ ${weekRange.end}</div>
+        </div>
+    `;
+
+    if (weekAttendance.length === 0) {
+      html += Utils.emptyState('📊', '本周暂无考勤记录');
+      html += '</div>';
+      return html;
+    }
+
+    // 统计每个学生的异常情况
+    const studentMap = {};
+    const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    weekAttendance.forEach(a => {
+      const dateObj = new Date(a.date);
+      const dayIdx = (dateObj.getDay() + 6) % 7; // 周一=0
+      const dayName = weekDays[dayIdx];
+
+      a.records.forEach(r => {
+        if (r.status === '出勤') return; // 只关注异常
+        if (!studentMap[r.studentId]) {
+          studentMap[r.studentId] = {
+            name: r.studentName,
+            late: [], leave: [], absent: []
+          };
+        }
+        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
+        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
+        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+      });
+    });
+
+    // 汇总数据
+    const allStudents = Object.values(studentMap);
+    const lateStudents = allStudents.filter(s => s.late.length > 0);
+    const leaveStudents = allStudents.filter(s => s.leave.length > 0);
+    const absentStudents = allStudents.filter(s => s.absent.length > 0);
+
+    // 统计卡片
+    html += `
+      <div class="stat-grid">
+        <div class="stat-card info"><div class="stat-value">${weekAttendance.length}</div><div class="stat-label">考勤天数</div></div>
+        <div class="stat-card warning"><div class="stat-value">${lateStudents.length}</div><div class="stat-label">迟到人数</div></div>
+        <div class="stat-card info"><div class="stat-value">${leaveStudents.length}</div><div class="stat-label">请假人数</div></div>
+        <div class="stat-card danger"><div class="stat-value">${absentStudents.length}</div><div class="stat-label">旷课人数</div></div>
+      </div>
+    `;
+
+    // 迟到
+    if (lateStudents.length > 0) {
+      html += `<div style="margin-top:12px;font-weight:700;color:var(--warning);margin-bottom:6px;">⏰ 迟到 (${lateStudents.length}人)</div>`;
+      lateStudents.forEach(s => {
+        html += `
+          <div class="list-item">
+            <div class="list-avatar" style="background:#fef3c7;color:#92400e;">${Utils.getInitial(s.name)}</div>
+            <div class="list-content">
+              <div class="list-title">${s.name}</div>
+              <div class="list-subtitle" style="color:var(--warning);">迟到${s.late.length}次（${s.late.join('、')}）</div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // 请假
+    if (leaveStudents.length > 0) {
+      html += `<div style="margin-top:12px;font-weight:700;color:var(--info);margin-bottom:6px;">📋 请假 (${leaveStudents.length}人)</div>`;
+      leaveStudents.forEach(s => {
+        html += `
+          <div class="list-item">
+            <div class="list-avatar" style="background:#dbeafe;color:#1e40af;">${Utils.getInitial(s.name)}</div>
+            <div class="list-content">
+              <div class="list-title">${s.name}</div>
+              <div class="list-subtitle" style="color:var(--info);">请假${s.leave.length}天（${s.leave.join('、')}）</div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // 旷课
+    if (absentStudents.length > 0) {
+      html += `<div style="margin-top:12px;font-weight:700;color:var(--danger);margin-bottom:6px;">✕ 旷课 (${absentStudents.length}人)</div>`;
+      absentStudents.forEach(s => {
+        html += `
+          <div class="list-item">
+            <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${Utils.getInitial(s.name)}</div>
+            <div class="list-content">
+              <div class="list-title">${s.name}</div>
+              <div class="list-subtitle" style="color:var(--danger);">旷课${s.absent.length}次（${s.absent.join('、')}）</div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    if (lateStudents.length === 0 && leaveStudents.length === 0 && absentStudents.length === 0) {
+      html += `<div style="padding:12px;text-align:center;color:var(--success);">🎉 本周全员正常出勤！</div>`;
+    }
+
+    html += `
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="AttendancePage.copyWeekly()">📋 复制周汇总（发班群）</button>
+        <button class="btn btn-outline" onclick="AttendancePage.exportWeekly()">📥 导出</button>
+      </div>
+    `;
+
+    return html;
+  },
+
+  copyWeekly() {
+    const weekRange = Utils.getWeekRange();
+    const attendance = DB.getByClass('attendance').filter(a => a.date >= weekRange.start && a.date <= weekRange.end);
+    const className = DB.getCurrentClass().name;
+    const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    const studentMap = {};
+    attendance.forEach(a => {
+      const dateObj = new Date(a.date);
+      const dayIdx = (dateObj.getDay() + 6) % 7;
+      const dayName = weekDays[dayIdx];
+      a.records.forEach(r => {
+        if (r.status === '出勤') return;
+        if (!studentMap[r.studentId]) {
+          studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+        }
+        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
+        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
+        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+      });
+    });
+
+    const allStudents = Object.values(studentMap);
+    const lateStudents = allStudents.filter(s => s.late.length > 0);
+    const leaveStudents = allStudents.filter(s => s.leave.length > 0);
+    const absentStudents = allStudents.filter(s => s.absent.length > 0);
+
+    let text = `📋 本周考勤汇总\n（${weekRange.start} ~ ${weekRange.end}）\n`;
+    text += `━━━━━━━━━━━━━━━━━━\n`;
+
+    if (lateStudents.length > 0) {
+      text += `\n⏰ 迟到：\n`;
+      lateStudents.forEach(s => {
+        text += `• ${s.name} - ${s.late.length}次（${s.late.join('、')}）\n`;
+      });
+    }
+    if (leaveStudents.length > 0) {
+      text += `\n📋 请假：\n`;
+      leaveStudents.forEach(s => {
+        text += `• ${s.name} - ${s.leave.length}天（${s.leave.join('、')}）\n`;
+      });
+    }
+    if (absentStudents.length > 0) {
+      text += `\n✕ 旷课：\n`;
+      absentStudents.forEach(s => {
+        text += `• ${s.name} - ${s.absent.length}次（${s.absent.join('、')}）\n`;
+      });
+    }
+
+    if (lateStudents.length === 0 && leaveStudents.length === 0 && absentStudents.length === 0) {
+      text += `\n🎉 本周全员正常出勤，表现棒棒哒！`;
+    } else {
+      text += `\n请家长关注孩子出勤情况，谢谢配合！`;
+    }
+
+    HomeworkPage.copyToClipboard(text);
+  },
+
+  exportWeekly() {
+    const weekRange = Utils.getWeekRange();
+    const attendance = DB.getByClass('attendance').filter(a => a.date >= weekRange.start && a.date <= weekRange.end);
+    const className = DB.getCurrentClass().name;
+    const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    const studentMap = {};
+    attendance.forEach(a => {
+      const dateObj = new Date(a.date);
+      const dayIdx = (dateObj.getDay() + 6) % 7;
+      const dayName = weekDays[dayIdx];
+      a.records.forEach(r => {
+        if (r.status === '出勤') return;
+        if (!studentMap[r.studentId]) {
+          studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+        }
+        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
+        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
+        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+      });
+    });
+
+    let csv = `${className} 本周考勤汇总 (${weekRange.start}~${weekRange.end})\n\n`;
+    csv += '姓名,迟到次数,迟到日期,请假天数,请假日期,旷课次数,旷课日期\n';
+
+    Object.values(studentMap).forEach(s => {
+      csv += `${s.name},${s.late.length}次,${s.late.join('、')},${s.leave.length}天,${s.leave.join('、')},${s.absent.length}次,${s.absent.join('、')}\n`;
+    });
+
+    Utils.downloadFile(`${className}_本周考勤汇总_${weekRange.start}.csv`, '\ufeff' + csv, 'text/csv');
+    Utils.toast('已导出', 'success');
   },
 
   renderHistory(attendance) {
