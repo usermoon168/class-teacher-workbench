@@ -43,19 +43,28 @@ const HomeworkPage = {
       <div class="segment-control">
         <div class="segment-item ${this.currentTab === 'list' ? 'active' : ''}" onclick="HomeworkPage.switchTab('list')">📋 作业列表</div>
         <div class="segment-item ${this.currentTab === 'stats' ? 'active' : ''}" onclick="HomeworkPage.switchTab('stats')">📊 提交统计</div>
+        <div class="segment-item ${this.currentTab === 'trend' ? 'active' : ''}" onclick="HomeworkPage.switchTab('trend')">📈 质量趋势</div>
+        <div class="segment-item ${this.currentTab === 'profile' ? 'active' : ''}" onclick="HomeworkPage.switchTab('profile')">👤 学生档案</div>
       </div>
     `;
 
     if (this.currentTab === 'list') {
       html += this.renderList(homeworks, records);
-    } else {
+    } else if (this.currentTab === 'stats') {
       html += this.renderStats(homeworks, records);
+    } else if (this.currentTab === 'trend') {
+      html += this.renderTrend(homeworks, records);
+    } else {
+      html += this.renderProfile(homeworks, records);
     }
 
     document.getElementById('mainContent').innerHTML = html;
 
     if (this.currentTab === 'stats' && homeworks.length > 0) {
       this.renderChart(homeworks, records);
+    }
+    if (this.currentTab === 'trend' && homeworks.length > 0) {
+      this.renderTrendChart(homeworks, records);
     }
   },
 
@@ -167,29 +176,238 @@ const HomeworkPage = {
     }
   },
 
-  showDetail(id) {
-    const hw = (DB.get('homework') || []).find(h => h.id === id);
-    if (!hw) return;
-    const records = DB.getByClass('homeworkRecords').filter(r => r.homeworkId === id);
+  // 质量趋势
+  renderTrend(homeworks, records) {
+    if (homeworks.length === 0) {
+      return Utils.emptyState('📈', '暂无质量趋势数据');
+    }
+    let html = `
+      <div class="card">
+        <div class="card-header"><div class="card-title">📈 作业质量趋势</div></div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">展示各次作业优/良/中/差的比例变化</div>
+        <div class="chart-container large"><canvas id="qualityTrendChart"></canvas></div>
+      </div>
+    `;
+
+    // 质量汇总表格
+    html += `
+      <div class="card">
+        <div class="card-header"><div class="card-title">📋 质量分布明细</div></div>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr><th>作业</th><th>优</th><th>良</th><th>中</th><th>差</th><th>未评</th><th>未交</th></tr>
+            </thead>
+            <tbody>
+    `;
+    const sorted = [...homeworks].sort((a, b) => a.assignedDate.localeCompare(b.assignedDate));
+    sorted.forEach(h => {
+      const hwRecords = records.filter(r => r.homeworkId === h.id);
+      const you = hwRecords.filter(r => r.quality === '优').length;
+      const liang = hwRecords.filter(r => r.quality === '良').length;
+      const zhong = hwRecords.filter(r => r.quality === '中').length;
+      const cha = hwRecords.filter(r => r.quality === '差').length;
+      const notRated = hwRecords.filter(r => r.status === '已提交' && !r.quality).length;
+      const notSubmitted = hwRecords.filter(r => r.status === '未提交').length;
+      html += `
+        <tr>
+          <td style="font-size:12px;">${h.subject}·${h.title.substring(0, 8)}</td>
+          <td style="color:var(--success);font-weight:600;">${you}</td>
+          <td style="color:var(--info);font-weight:600;">${liang}</td>
+          <td style="color:var(--warning);font-weight:600;">${zhong}</td>
+          <td style="color:var(--danger);font-weight:600;">${cha}</td>
+          <td style="color:var(--gray-400);">${notRated}</td>
+          <td style="color:var(--danger);">${notSubmitted}</td>
+        </tr>
+      `;
+    });
+    html += '</tbody></table></div></div>';
+
+    return html;
+  },
+
+  renderTrendChart(homeworks, records) {
+    const sorted = [...homeworks].sort((a, b) => a.assignedDate.localeCompare(b.assignedDate));
+    const labels = sorted.map(h => h.title.substring(0, 6));
+    const youData = [], liangData = [], zhongData = [], chaData = [];
+    sorted.forEach(h => {
+      const hwRecords = records.filter(r => r.homeworkId === h.id && r.status === '已提交');
+      const total = hwRecords.length || 1;
+      youData.push((hwRecords.filter(r => r.quality === '优').length / total * 100).toFixed(0));
+      liangData.push((hwRecords.filter(r => r.quality === '良').length / total * 100).toFixed(0));
+      zhongData.push((hwRecords.filter(r => r.quality === '中').length / total * 100).toFixed(0));
+      chaData.push((hwRecords.filter(r => r.quality === '差').length / total * 100).toFixed(0));
+    });
+
+    Utils.destroyChart('qualityTrendChart');
+    new Chart(document.getElementById('qualityTrendChart'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: '优(%)', data: youData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, fill: false },
+          { label: '良(%)', data: liangData, borderColor: '#0ea5e9', backgroundColor: 'rgba(14,165,233,0.1)', tension: 0.3, fill: false },
+          { label: '中(%)', data: zhongData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', tension: 0.3, fill: false },
+          { label: '差(%)', data: chaData, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.3, fill: false }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }
+      }
+    });
+  },
+
+  // 学生档案
+  renderProfile(homeworks, records) {
+    if (homeworks.length === 0) {
+      return Utils.emptyState('👤', '暂无学生作业档案');
+    }
     const students = DB.getByClass('students');
-    const submitted = records.filter(r => r.status === '已提交').length;
-    const rate = records.length > 0 ? (submitted / records.length * 100).toFixed(0) : 0;
+    if (students.length === 0) return Utils.emptyState('👤', '暂无学生');
+
+    // 统计每个学生
+    const studentStats = students.map(s => {
+      const sRecords = records.filter(r => r.studentId === s.id);
+      const submitted = sRecords.filter(r => r.status === '已提交');
+      const unsubmitted = sRecords.filter(r => r.status === '未提交');
+      const submitRate = sRecords.length > 0 ? (submitted.length / sRecords.length * 100).toFixed(0) : 100;
+      const youCount = submitted.filter(r => r.quality === '优').length;
+      const liangCount = submitted.filter(r => r.quality === '良').length;
+      const zhongCount = submitted.filter(r => r.quality === '中').length;
+      const chaCount = submitted.filter(r => r.quality === '差').length;
+      return {
+        student: s,
+        total: sRecords.length,
+        submitted: submitted.length,
+        unsubmitted: unsubmitted.length,
+        submitRate: parseFloat(submitRate),
+        youCount, liangCount, zhongCount, chaCount
+      };
+    });
+
+    // 排序：未交多的在前
+    studentStats.sort((a, b) => {
+      if (b.unsubmitted !== a.unsubmitted) return b.unsubmitted - a.unsubmitted;
+      return a.submitRate - b.submitRate;
+    });
+
+    // 预警学生
+    const warningStudents = studentStats.filter(s => s.unsubmitted >= 3);
+    if (warningStudents.length > 0) {
+      let warningHtml = `
+        <div class="card" style="border-left:4px solid var(--danger);">
+          <div class="card-header"><div class="card-title" style="color:var(--danger);">⚠️ 作业预警 (${warningStudents.length}人未交≥3次)</div></div>
+      `;
+      warningStudents.forEach(s => {
+        warningHtml += `
+          <div class="list-item" onclick="HomeworkPage.showStudentProfile('${s.student.id}')">
+            <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${Utils.getInitial(s.student.name)}</div>
+            <div class="list-content">
+              <div class="list-title">${s.student.name}</div>
+              <div class="list-subtitle" style="color:var(--danger);">未交${s.unsubmitted}次 · 提交率${s.submitRate}%</div>
+            </div>
+            <span class="tag tag-danger">需关注</span>
+          </div>
+        `;
+      });
+      warningHtml += '</div>';
+      var warningCard = warningHtml;
+    }
+
+    let html = warningCard || '';
+
+    // 全部学生列表
+    html += `
+      <div class="card">
+        <div class="card-header"><div class="card-title">👤 全部学生作业档案</div></div>
+    `;
+    studentStats.forEach(s => {
+      const isWarning = s.unsubmitted >= 3;
+      html += `
+        <div class="list-item" onclick="HomeworkPage.showStudentProfile('${s.student.id}')">
+          <div class="list-avatar" style="background:${isWarning ? '#fee2e2' : 'var(--primary-bg)'};color:${isWarning ? 'var(--danger)' : 'var(--primary)'};">${Utils.getInitial(s.student.name)}</div>
+          <div class="list-content">
+            <div class="list-title">${s.student.name} ${isWarning ? '<span class="tag tag-danger" style="font-size:10px;">未交' + s.unsubmitted + '</span>' : ''}</div>
+            <div class="list-subtitle">提交率${s.submitRate}% | 优${s.youCount} 良${s.liangCount} 中${s.zhongCount} 差${s.chaCount}</div>
+          </div>
+          <div class="list-action">›</div>
+        </div>
+      `;
+    });
+    html += '</div>';
+
+    return html;
+  },
+
+  showStudentProfile(studentId) {
+    const student = (DB.get('students') || []).find(s => s.id === studentId);
+    if (!student) return;
+    const homeworks = DB.getByClass('homework');
+    const records = DB.getByClass('homeworkRecords').filter(r => r.studentId === studentId);
+    const sorted = [...homeworks].sort((a, b) => b.assignedDate.localeCompare(a.assignedDate));
+
+    const submitted = records.filter(r => r.status === '已提交');
+    const unsubmitted = records.filter(r => r.status === '未提交');
+    const submitRate = records.length > 0 ? (submitted.length / records.length * 100).toFixed(0) : 100;
+    const qualityCounts = { '优': 0, '良': 0, '中': 0, '差': 0 };
+    submitted.forEach(r => { if (qualityCounts[r.quality] !== undefined) qualityCounts[r.quality]++; });
 
     let html = `
       <div class="card">
-        <div style="font-weight:700;font-size:18px;">${hw.subject} · ${hw.title}</div>
-        <div style="font-size:13px;color:var(--gray-500);margin-top:6px;">布置日期：${hw.assignedDate} | 截止日期：${hw.dueDate}</div>
-        <div style="font-size:14px;margin-top:8px;">${hw.content}</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="list-avatar" style="width:48px;height:48px;font-size:20px;background:${Utils.getColorFromName(student.name)};color:#fff;">${Utils.getInitial(student.name)}</div>
+          <div>
+            <div style="font-weight:700;font-size:18px;">${student.name}</div>
+            <div style="font-size:13px;color:var(--gray-500);">作业档案详情</div>
+          </div>
+        </div>
       </div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-value">${records.length}</div><div class="stat-label">应交人数</div></div>
-        <div class="stat-card success"><div class="stat-value">${submitted}</div><div class="stat-label">已交人数</div></div>
-        <div class="stat-card danger"><div class="stat-value">${records.length - submitted}</div><div class="stat-label">未交人数</div></div>
-        <div class="stat-card info"><div class="stat-value">${rate}%</div><div class="stat-label">提交率</div></div>
+        <div class="stat-card"><div class="stat-value">${records.length}</div><div class="stat-label">作业总数</div></div>
+        <div class="stat-card success"><div class="stat-value">${submitted.length}</div><div class="stat-label">已交</div></div>
+        <div class="stat-card danger"><div class="stat-value">${unsubmitted.length}</div><div class="stat-label">未交</div></div>
+        <div class="stat-card info"><div class="stat-value">${submitRate}%</div><div class="stat-label">提交率</div></div>
       </div>
-      <div style="margin-top:12px;">
-        <div style="font-weight:700;margin-bottom:8px;">📋 完成情况</div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">📊 质量分布</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="tag tag-success" style="font-size:14px;padding:8px 16px;">优 ${qualityCounts['优']}</span>
+          <span class="tag tag-info" style="font-size:14px;padding:8px 16px;">良 ${qualityCounts['良']}</span>
+          <span class="tag tag-warning" style="font-size:14px;padding:8px 16px;">中 ${qualityCounts['中']}</span>
+          <span class="tag tag-danger" style="font-size:14px;padding:8px 16px;">差 ${qualityCounts['差']}</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">📋 历次作业记录</div></div>
     `;
+
+    sorted.forEach(h => {
+      const r = records.find(rec => rec.homeworkId === h.id);
+      if (!r) return;
+      const qualityColor = r.quality === '优' ? 'success' : r.quality === '良' ? 'info' : r.quality === '中' ? 'warning' : r.quality === '差' ? 'danger' : 'gray';
+      html += `
+        <div class="list-item">
+          <div class="list-avatar" style="background:${r.status === '已提交' ? '#d1fae5' : '#fee2e2'};color:${r.status === '已提交' ? '#065f46' : '#991b1b'};font-size:12px;">${h.assignedDate.substring(5)}</div>
+          <div class="list-content">
+            <div class="list-title">${h.subject} · ${h.title}</div>
+            <div class="list-subtitle">${r.status === '已提交' ? '已提交' : '⚠️ 未提交'}</div>
+          </div>
+          ${r.status === '已提交' ? `<span class="tag tag-${qualityColor}">${r.quality || '未评'}</span>` : '<span class="tag tag-danger">未交</span>'}
+        </div>
+      `;
+    });
+
+    html += '</div>';
+
+    Utils.showModal(`${student.name} - 作业档案`, html, `
+      <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">关闭</button>
+    `);
+  },
+
+  showDetail(id) {
 
     // 未提交学生先显示
     const unsubmitted = records.filter(r => r.status === '未提交');
