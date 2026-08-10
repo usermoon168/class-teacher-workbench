@@ -102,6 +102,18 @@ const DashboardPage = {
             <div class="quick-icon" style="background:#fff7ed;color:#9a3412;">🪑</div>
             <span>座位表</span>
           </div>
+          <div class="quick-item" onclick="navigateTo('attendance')">
+            <div class="quick-icon" style="background:#f0fdf4;color:#166534;">📋</div>
+            <span>今日考勤</span>
+          </div>
+          <div class="quick-item" onclick="navigateTo('randomname')">
+            <div class="quick-icon" style="background:#faf5ff;color:#7e22ce;">🎲</div>
+            <span>随机点名</span>
+          </div>
+          <div class="quick-item" onclick="navigateTo('countdown')">
+            <div class="quick-icon" style="background:#fffbeb;color:#b45309;">⏰</div>
+            <span>倒计时</span>
+          </div>
         </div>
       </div>
     `;
@@ -126,6 +138,35 @@ const DashboardPage = {
               <div class="reminder-title">${r.title}</div>
               <div class="reminder-desc">${r.date} · ${days === 0 ? '今天' : days === 1 ? '明天' : days + '天后'}</div>
             </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+    }
+
+    // 倒计时
+    const countdowns = DB.getByClass('countdowns');
+    const upcomingCountdowns = countdowns.filter(c => c.targetDate >= today).sort((a, b) => a.targetDate.localeCompare(b.targetDate)).slice(0, 3);
+    if (upcomingCountdowns.length > 0) {
+      html += `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⏰ 倒计时</div>
+            <button class="btn btn-sm btn-outline" onclick="navigateTo('countdown')">全部 ›</button>
+          </div>
+      `;
+      upcomingCountdowns.forEach(c => {
+        const days = Utils.daysBetween(today, c.targetDate);
+        const isUrgent = days <= 7;
+        const typeIcons = { exam: '📝', activity: '🎉', meeting: '🤝', other: '📌' };
+        html += `
+          <div class="reminder-item ${isUrgent ? 'danger' : 'info'}">
+            <div class="reminder-icon">${typeIcons[c.type] || '📌'}</div>
+            <div class="reminder-content">
+              <div class="reminder-title">${c.title}</div>
+              <div class="reminder-desc">${c.targetDate} · ${days === 0 ? '今天' : days + '天后'}</div>
+            </div>
+            <div style="font-size:24px;font-weight:700;color:${isUrgent ? 'var(--danger)' : 'var(--primary)'};">${days === 0 ? '今' : days}</div>
           </div>
         `;
       });
