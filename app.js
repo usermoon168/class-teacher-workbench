@@ -87,6 +87,10 @@ const App = {
       seating: () => SeatingPage.render(),
       communication: () => CommunicationPage.render(),
       activities: () => ActivitiesPage.render(),
+      attendance: () => AttendancePage.render(),
+      meeting: () => MeetingPage.render(),
+      randomname: () => RandomNamePage.render(),
+      countdown: () => CountdownPage.render(),
       todo: () => TodoPage.render()
     };
 
