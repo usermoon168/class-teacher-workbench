@@ -171,21 +171,25 @@ const MeetingPage = {
       submitted.forEach(r => { if (qualityCounts[r.quality] !== undefined) qualityCounts[r.quality]++; });
       const homeworkSummary = `作业提交率${hwRate}%（${submitted.length}/${studentHwRecords.length}），质量评价：优${qualityCounts['优']}次/良${qualityCounts['良']}次/中${qualityCounts['中']}次/差${qualityCounts['差']}次。`;
 
-      // 出勤
-      let present = 0, late = 0, leave = 0, absent = 0;
+      // 出勤（学生每天分上午/下午两个时段，按时段统计）
+      // 正常到校 = 出勤 + 迟到；缺勤 = 请假 + 旷课
+      let normal = 0, late = 0, leave = 0, absent = 0;
       attendance.forEach(a => {
         const r = a.records.find(rec => rec.studentId === s.id);
         if (r) {
-          if (r.status === '出勤') present++;
-          else if (r.status === '迟到') late++;
-          else if (r.status === '请假') leave++;
-          else if (r.status === '旷课') absent++;
+          const n = AttendancePage.norm(r);
+          [n.am, n.pm].forEach(st => {
+            if (st === '出勤') { normal++; }
+            else if (st === '迟到') { late++; normal++; }
+            else if (st === '请假') { leave++; }
+            else if (st === '旷课') { absent++; }
+          });
         }
       });
-      const totalAtt = present + late + leave + absent;
-      const attRate = totalAtt > 0 ? ((present + late) / totalAtt * 100).toFixed(0) : 100;
+      const totalAtt = normal + late + leave + absent;
+      const attRate = totalAtt > 0 ? (normal / totalAtt * 100).toFixed(0) : 100;
       const attendanceSummary = totalAtt > 0
-        ? `出勤率${attRate}%（出勤${present}天、迟到${late}次、请假${leave}天、旷课${absent}次）。`
+        ? `出勤率${attRate}%（到校${normal}个时段、迟到${late}次、请假${leave}次、旷课${absent}次）。`
         : '暂无考勤记录。';
 
       // 组装报告内容
