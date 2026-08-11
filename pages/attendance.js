@@ -1,15 +1,24 @@
 /**
  * 考勤管理页面
+ * 每个学生每天分上午(am)和下午(pm)两个独立考勤时段
  */
 const AttendancePage = {
   currentTab: 'today',
   selectedMonth: '',
 
+  // 兼容旧数据：旧记录只有 status 字段（整天），新记录有 am/pm
+  norm(r) {
+    if (!r) return { am: '出勤', pm: '出勤' };
+    if (r.am !== undefined && r.pm !== undefined) return r;
+    const st = r.status || '出勤';
+    return { studentId: r.studentId, studentName: r.studentName, am: st, pm: st, note: r.note || '' };
+  },
+
   render() {
     if (!this.selectedMonth) this.selectedMonth = Utils.today().substring(0, 7);
     let html = `
       <div class="page-title">📋 考勤管理</div>
-      <div class="page-subtitle">每日考勤 · 历史记录 · 月度报表</div>
+      <div class="page-subtitle">上午/下午考勤 · 历史记录 · 月度报表</div>
     `;
 
     const attendance = DB.getByClass('attendance');
@@ -17,25 +26,27 @@ const AttendancePage = {
     const today = Utils.today();
     const todayRecord = attendance.find(a => a.date === today);
 
-    // 统计
-    let presentCount = 0, lateCount = 0, leaveCount = 0, absentCount = 0;
+    // 统计（按时段）
+    let lateCount = 0, leaveCount = 0, absentCount = 0, totalPeriods = 0;
     if (todayRecord) {
       todayRecord.records.forEach(r => {
-        if (r.status === '出勤') presentCount++;
-        else if (r.status === '迟到') lateCount++;
-        else if (r.status === '请假') leaveCount++;
-        else if (r.status === '旷课') absentCount++;
+        const n = this.norm(r);
+        [n.am, n.pm].forEach(st => {
+          totalPeriods++;
+          if (st === '迟到') lateCount++;
+          else if (st === '请假') leaveCount++;
+          else if (st === '旷课') absentCount++;
+        });
       });
     }
-    const totalStudents = students.length;
-    const attendRate = totalStudents > 0 ? ((presentCount + lateCount) / totalStudents * 100).toFixed(0) : 0;
+    const attendRate = totalPeriods > 0 ? ((totalPeriods - lateCount - leaveCount - absentCount) / totalPeriods * 100).toFixed(0) : 0;
 
     html += `
       <div class="stat-grid">
-        <div class="stat-card success"><div class="stat-value">${presentCount}</div><div class="stat-label">出勤</div></div>
-        <div class="stat-card warning"><div class="stat-value">${lateCount}</div><div class="stat-label">迟到</div></div>
-        <div class="stat-card info"><div class="stat-value">${leaveCount}</div><div class="stat-label">请假</div></div>
-        <div class="stat-card danger"><div class="stat-value">${absentCount}</div><div class="stat-label">旷课</div></div>
+        <div class="stat-card success"><div class="stat-value">${attendRate}%</div><div class="stat-label">出勤率</div></div>
+        <div class="stat-card warning"><div class="stat-value">${lateCount}</div><div class="stat-label">迟到人次</div></div>
+        <div class="stat-card info"><div class="stat-value">${leaveCount}</div><div class="stat-label">请假人次</div></div>
+        <div class="stat-card danger"><div class="stat-value">${absentCount}</div><div class="stat-label">旷课人次</div></div>
       </div>
     `;
 
@@ -67,7 +78,6 @@ const AttendancePage = {
       return Utils.emptyState('📋', '暂无学生，请先添加学生');
     }
 
-    const statusOrder = ['出勤', '迟到', '请假', '旷课'];
     const statusColors = { '出勤': 'success', '迟到': 'warning', '请假': 'info', '旷课': 'danger' };
     const statusIcons = { '出勤': '✓', '迟到': '⏰', '请假': '📋', '旷课': '✕' };
 
@@ -82,14 +92,21 @@ const AttendancePage = {
 
     students.forEach(s => {
       const record = todayRecord?.records.find(r => r.studentId === s.id);
-      const status = record?.status || '出勤';
-      const colorClass = statusColors[status];
+      const n = this.norm(record);
+      const amClass = statusColors[n.am];
+      const pmClass = statusColors[n.pm];
       html += `
-        <div class="attendance-student att-${colorClass}" onclick="AttendancePage.cycleStatus('${s.id}')">
-          <div class="att-icon">${statusIcons[status]}</div>
+        <div class="attendance-student">
           <div class="att-name">${s.name}</div>
-          <div class="att-status">${status}</div>
           <div class="att-seat">No.${s.seatNo || s.studentNo || ''}</div>
+          <div class="att-periods">
+            <div class="att-period att-${amClass}" onclick="AttendancePage.cyclePeriodStatus('${s.id}','am')">
+              <span class="att-period-icon">☀️</span>${n.am}
+            </div>
+            <div class="att-period att-${pmClass}" onclick="AttendancePage.cyclePeriodStatus('${s.id}','pm')">
+              <span class="att-period-icon">🌙</span>${n.pm}
+            </div>
+          </div>
         </div>
       `;
     });
@@ -98,7 +115,7 @@ const AttendancePage = {
         </div>
       </div>
       <div style="margin-top:12px;padding:12px;background:var(--primary-bg);border-radius:var(--radius);font-size:13px;color:var(--text-secondary);text-align:center;">
-        💡 点击学生卡片切换考勤状态：出勤 → 迟到 → 请假 → 旷课 → 出勤
+        💡 分别点击「☀️上午」「🌙下午」切换考勤状态：出勤 → 迟到 → 请假 → 旷课 → 出勤
       </div>
     `;
 
@@ -124,7 +141,7 @@ const AttendancePage = {
       return html;
     }
 
-    // 统计每个学生的异常情况
+    // 统计每个学生的异常情况（按时段）
     const studentMap = {};
     const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
@@ -134,16 +151,17 @@ const AttendancePage = {
       const dayName = weekDays[dayIdx];
 
       a.records.forEach(r => {
-        if (r.status === '出勤') return; // 只关注异常
-        if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = {
-            name: r.studentName,
-            late: [], leave: [], absent: []
-          };
-        }
-        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
-        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
-        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+        const n = this.norm(r);
+        [['am', n.am], ['pm', n.pm]].forEach(([period, st]) => {
+          if (st === '出勤') return; // 只关注异常
+          if (!studentMap[r.studentId]) {
+            studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+          }
+          const suffix = period === 'am' ? '上午' : '下午';
+          if (st === '迟到') studentMap[r.studentId].late.push(`${dayName}${suffix}`);
+          else if (st === '请假') studentMap[r.studentId].leave.push(`${dayName}${suffix}`);
+          else if (st === '旷课') studentMap[r.studentId].absent.push(`${dayName}${suffix}`);
+        });
       });
     });
 
@@ -167,12 +185,13 @@ const AttendancePage = {
     if (lateStudents.length > 0) {
       html += `<div style="margin-top:12px;font-weight:700;color:var(--warning);margin-bottom:6px;">⏰ 迟到 (${lateStudents.length}人)</div>`;
       lateStudents.forEach(s => {
+        const count = s.late.length;
         html += `
           <div class="list-item">
             <div class="list-avatar" style="background:#fef3c7;color:#92400e;">${Utils.getInitial(s.name)}</div>
             <div class="list-content">
               <div class="list-title">${s.name}</div>
-              <div class="list-subtitle" style="color:var(--warning);">迟到${s.late.length}次（${s.late.join('、')}）</div>
+              <div class="list-subtitle" style="color:var(--warning);">迟到${count}次（${s.late.join('、')}）</div>
             </div>
           </div>
         `;
@@ -183,12 +202,13 @@ const AttendancePage = {
     if (leaveStudents.length > 0) {
       html += `<div style="margin-top:12px;font-weight:700;color:var(--info);margin-bottom:6px;">📋 请假 (${leaveStudents.length}人)</div>`;
       leaveStudents.forEach(s => {
+        const count = s.leave.length;
         html += `
           <div class="list-item">
             <div class="list-avatar" style="background:#dbeafe;color:#1e40af;">${Utils.getInitial(s.name)}</div>
             <div class="list-content">
               <div class="list-title">${s.name}</div>
-              <div class="list-subtitle" style="color:var(--info);">请假${s.leave.length}天（${s.leave.join('、')}）</div>
+              <div class="list-subtitle" style="color:var(--info);">请假${count}次（${s.leave.join('、')}）</div>
             </div>
           </div>
         `;
@@ -199,12 +219,13 @@ const AttendancePage = {
     if (absentStudents.length > 0) {
       html += `<div style="margin-top:12px;font-weight:700;color:var(--danger);margin-bottom:6px;">✕ 旷课 (${absentStudents.length}人)</div>`;
       absentStudents.forEach(s => {
+        const count = s.absent.length;
         html += `
           <div class="list-item">
             <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${Utils.getInitial(s.name)}</div>
             <div class="list-content">
               <div class="list-title">${s.name}</div>
-              <div class="list-subtitle" style="color:var(--danger);">旷课${s.absent.length}次（${s.absent.join('、')}）</div>
+              <div class="list-subtitle" style="color:var(--danger);">旷课${count}次（${s.absent.join('、')}）</div>
             </div>
           </div>
         `;
@@ -238,13 +259,17 @@ const AttendancePage = {
       const dayIdx = (dateObj.getDay() + 6) % 7;
       const dayName = weekDays[dayIdx];
       a.records.forEach(r => {
-        if (r.status === '出勤') return;
-        if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
-        }
-        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
-        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
-        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+        const n = this.norm(r);
+        [['am', n.am], ['pm', n.pm]].forEach(([period, st]) => {
+          if (st === '出勤') return;
+          if (!studentMap[r.studentId]) {
+            studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+          }
+          const suffix = period === 'am' ? '上午' : '下午';
+          if (st === '迟到') studentMap[r.studentId].late.push(`${dayName}${suffix}`);
+          else if (st === '请假') studentMap[r.studentId].leave.push(`${dayName}${suffix}`);
+          else if (st === '旷课') studentMap[r.studentId].absent.push(`${dayName}${suffix}`);
+        });
       });
     });
 
@@ -265,7 +290,7 @@ const AttendancePage = {
     if (leaveStudents.length > 0) {
       text += `\n📋 请假：\n`;
       leaveStudents.forEach(s => {
-        text += `• ${s.name} - ${s.leave.length}天（${s.leave.join('、')}）\n`;
+        text += `• ${s.name} - ${s.leave.length}次（${s.leave.join('、')}）\n`;
       });
     }
     if (absentStudents.length > 0) {
@@ -296,21 +321,25 @@ const AttendancePage = {
       const dayIdx = (dateObj.getDay() + 6) % 7;
       const dayName = weekDays[dayIdx];
       a.records.forEach(r => {
-        if (r.status === '出勤') return;
-        if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
-        }
-        if (r.status === '迟到') studentMap[r.studentId].late.push(dayName);
-        else if (r.status === '请假') studentMap[r.studentId].leave.push(dayName);
-        else if (r.status === '旷课') studentMap[r.studentId].absent.push(dayName);
+        const n = this.norm(r);
+        [['am', n.am], ['pm', n.pm]].forEach(([period, st]) => {
+          if (st === '出勤') return;
+          if (!studentMap[r.studentId]) {
+            studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+          }
+          const suffix = period === 'am' ? '上午' : '下午';
+          if (st === '迟到') studentMap[r.studentId].late.push(`${dayName}${suffix}`);
+          else if (st === '请假') studentMap[r.studentId].leave.push(`${dayName}${suffix}`);
+          else if (st === '旷课') studentMap[r.studentId].absent.push(`${dayName}${suffix}`);
+        });
       });
     });
 
     let csv = `${className} 本周考勤汇总 (${weekRange.start}~${weekRange.end})\n\n`;
-    csv += '姓名,迟到次数,迟到日期,请假天数,请假日期,旷课次数,旷课日期\n';
+    csv += '姓名,迟到次数,迟到时段,请假次数,请假时段,旷课次数,旷课时段\n';
 
     Object.values(studentMap).forEach(s => {
-      csv += `${s.name},${s.late.length}次,${s.late.join('、')},${s.leave.length}天,${s.leave.join('、')},${s.absent.length}次,${s.absent.join('、')}\n`;
+      csv += `${s.name},${s.late.length}次,${s.late.join('；')},${s.leave.length}次,${s.leave.join('；')},${s.absent.length}次,${s.absent.join('；')}\n`;
     });
 
     Utils.downloadFile(`${className}_本周考勤汇总_${weekRange.start}.csv`, '\ufeff' + csv, 'text/csv');
@@ -324,18 +353,25 @@ const AttendancePage = {
     const sorted = [...attendance].sort((a, b) => b.date.localeCompare(a.date));
     let html = '<div class="card"><div class="card-header"><div class="card-title">📅 考勤历史</div></div>';
     sorted.forEach(a => {
-      const present = a.records.filter(r => r.status === '出勤').length;
-      const late = a.records.filter(r => r.status === '迟到').length;
-      const leave = a.records.filter(r => r.status === '请假').length;
-      const absent = a.records.filter(r => r.status === '旷课').length;
-      const total = a.records.length;
-      const rate = total > 0 ? ((present + late) / total * 100).toFixed(0) : 0;
+      let present = 0, late = 0, leave = 0, absent = 0, total = 0;
+      a.records.forEach(r => {
+        const n = this.norm(r);
+        [n.am, n.pm].forEach(st => {
+          total++;
+          if (st === '出勤') present++;
+          else if (st === '迟到') late++;
+          else if (st === '请假') leave++;
+          else if (st === '旷课') absent++;
+        });
+      });
+      const normal = present + late;
+      const rate = total > 0 ? (normal / total * 100).toFixed(0) : 0;
       html += `
         <div class="list-item" onclick="AttendancePage.showHistoryDetail('${a.id}')">
           <div class="list-avatar" style="background:var(--primary-bg);color:var(--primary);">${a.date.substring(8, 10)}</div>
           <div class="list-content">
             <div class="list-title">${a.date} ${Utils.weekday(a.date)}</div>
-            <div class="list-subtitle">出勤${present} · 迟到${late} · 请假${leave} · 旷课${absent}</div>
+            <div class="list-subtitle">迟到${late} · 请假${leave} · 旷课${absent}</div>
           </div>
           <span class="tag tag-${rate >= 95 ? 'success' : rate >= 80 ? 'warning' : 'danger'}">${rate}%</span>
         </div>
@@ -362,16 +398,19 @@ const AttendancePage = {
       return html;
     }
 
-    // 统计每个学生
+    // 统计每个学生（按时段）
     const studentStats = students.map(s => {
       let present = 0, late = 0, leave = 0, absent = 0;
       monthAttendance.forEach(a => {
         const r = a.records.find(rec => rec.studentId === s.id);
         if (r) {
-          if (r.status === '出勤') present++;
-          else if (r.status === '迟到') late++;
-          else if (r.status === '请假') leave++;
-          else if (r.status === '旷课') absent++;
+          const n = this.norm(r);
+          [n.am, n.pm].forEach(st => {
+            if (st === '出勤') present++;
+            else if (st === '迟到') late++;
+            else if (st === '请假') leave++;
+            else if (st === '旷课') absent++;
+          });
         }
       });
       const total = present + late + leave + absent;
@@ -438,13 +477,13 @@ const AttendancePage = {
     return html;
   },
 
-  cycleStatus(studentId) {
+  cyclePeriodStatus(studentId, period) {
+    const STATUS_ORDER = ['出勤', '迟到', '请假', '旷课'];
     const today = Utils.today();
     const attendance = DB.get('attendance') || [];
     let todayRecord = attendance.find(a => a.date === today && a.classId === DB.currentClassId);
 
     if (!todayRecord) {
-      // 创建今日考勤记录
       todayRecord = {
         id: DB.genId(),
         classId: DB.currentClassId,
@@ -453,25 +492,26 @@ const AttendancePage = {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      // 初始化所有学生为出勤
       const students = DB.getByClass('students');
       students.forEach(s => {
         todayRecord.records.push({
           studentId: s.id,
           studentName: s.name,
-          status: '出勤',
+          am: '出勤',
+          pm: '出勤',
           note: ''
         });
       });
       attendance.push(todayRecord);
     }
 
-    // 循环切换状态
-    const statusOrder = ['出勤', '迟到', '请假', '旷课'];
     const record = todayRecord.records.find(r => r.studentId === studentId);
     if (record) {
-      const currentIdx = statusOrder.indexOf(record.status);
-      record.status = statusOrder[(currentIdx + 1) % statusOrder.length];
+      let n = this.norm(record);
+      const currentIdx = STATUS_ORDER.indexOf(n[period]);
+      n[period] = STATUS_ORDER[(currentIdx + 1) % STATUS_ORDER.length];
+      record.am = n.am;
+      record.pm = n.pm;
     }
 
     todayRecord.updatedAt = new Date().toISOString();
@@ -500,7 +540,8 @@ const AttendancePage = {
     todayRecord.records = students.map(s => ({
       studentId: s.id,
       studentName: s.name,
-      status: '出勤',
+      am: '出勤',
+      pm: '出勤',
       note: ''
     }));
     todayRecord.updatedAt = new Date().toISOString();
@@ -517,17 +558,20 @@ const AttendancePage = {
     let html = `
       <div class="card">
         <div style="font-weight:700;font-size:18px;">${record.date} ${Utils.weekday(record.date)}</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-top:4px;">每位学生分上午/下午两段考勤</div>
       </div>
       <div class="attendance-grid">
     `;
 
     record.records.forEach(r => {
-      const colorClass = statusColors[r.status];
+      const n = this.norm(r);
       html += `
-        <div class="attendance-student att-${colorClass}">
-          <div class="att-icon">${r.status === '出勤' ? '✓' : r.status === '迟到' ? '⏰' : r.status === '请假' ? '📋' : '✕'}</div>
+        <div class="attendance-student">
           <div class="att-name">${r.studentName}</div>
-          <div class="att-status">${r.status}</div>
+          <div class="att-periods">
+            <div class="att-period att-${statusColors[n.am]}"><span class="att-period-icon">☀️</span>${n.am}</div>
+            <div class="att-period att-${statusColors[n.pm]}"><span class="att-period-icon">🌙</span>${n.pm}</div>
+          </div>
         </div>
       `;
     });
@@ -559,18 +603,21 @@ const AttendancePage = {
     const students = DB.getByClass('students');
     const className = DB.getCurrentClass().name;
 
-    let csv = `班主任工作台 - ${className} ${this.selectedMonth} 考勤报表\n\n`;
-    csv += '姓名,出勤天数,迟到天数,请假天数,旷课天数,出勤率\n';
+    let csv = `班主任工作台 - ${className} ${this.selectedMonth} 考勤报表（上午/下午分段）\n\n`;
+    csv += '姓名,出勤,迟到,请假,旷课,出勤率\n';
 
     students.forEach(s => {
       let present = 0, late = 0, leave = 0, absent = 0;
       attendance.forEach(a => {
         const r = a.records.find(rec => rec.studentId === s.id);
         if (r) {
-          if (r.status === '出勤') present++;
-          else if (r.status === '迟到') late++;
-          else if (r.status === '请假') leave++;
-          else if (r.status === '旷课') absent++;
+          const n = this.norm(r);
+          [n.am, n.pm].forEach(st => {
+            if (st === '出勤') present++;
+            else if (st === '迟到') late++;
+            else if (st === '请假') leave++;
+            else if (st === '旷课') absent++;
+          });
         }
       });
       const total = present + late + leave + absent;
