@@ -132,19 +132,56 @@ const DataSetup = {
     if (typeof App !== 'undefined' && typeof currentPage !== 'undefined') App.navigate(currentPage);
   },
 
-  // 打开页面时自动执行（仅一次）：删除其他班级并导入花名册
+  // 打开页面时自动执行：确保七3班、七4班均已创建并导入花名册
   autoMigrateIfNeeded() {
-    // 步骤 1：保留七3班并导入其 63 名花名册
-    if (!DB.get('dataSetupDone')) {
-      const classes = DB.get('classes') || [];
-      const hasOthers = classes.some(c => ['class_qi_10', 'class_1', 'class_3'].includes(c.id));
-      if (hasOthers) this.apply();
-      else DB.set('dataSetupDone', '1');
+    this.ensureClass3();
+    this.ensureClass4();
+  },
+
+  // 确保七3班存在并导入 63 名花名册；同时清理模板自带的示例班级
+  ensureClass3() {
+    const keep = this.TARGET_CLASS_ID;
+    const removeIds = ['class_qi_10', 'class_1', 'class_3'];
+
+    // 1. 清理模板示例班级（七年级10班 / 八年级10班 / 九年级5班）及其全部数据
+    const moduleKeys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
+      'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
+      'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+    moduleKeys.forEach(k => {
+      const data = DB.get(k) || [];
+      const filtered = data.filter(it => !removeIds.includes(it.classId));
+      if (filtered.length !== data.length) DB.set(k, filtered);
+    });
+
+    // 2. classes 仅保留真实班级
+    let classes = (DB.get('classes') || []).filter(c => !removeIds.includes(c.id));
+    if (!classes.find(c => c.id === keep)) {
+      classes.push({ id: keep, name: this.TARGET_CLASS_NAME, grade: '七年级', classNo: '3', studentCount: this.ROSTER.length });
     }
-    // 步骤 2：创建七4班并导入其 64 名花名册（不会动七3班）
-    if (!DB.get('dataSetupClass4Done')) {
-      this.createClass4();
+    DB.set('classes', classes);
+
+    // 3. 首次导入七3班花名册（已存在则跳过）
+    const students = DB.get('students') || [];
+    if (!students.some(s => s.classId === keep)) {
+      const now = new Date().toISOString();
+      this.ROSTER.forEach((row, i) => {
+        const [name, gender, phone, address] = row;
+        students.push({
+          id: 'stu_qi3_' + String(i + 1).padStart(3, '0'),
+          classId: keep, name, gender, phone: phone || '', address: address || '',
+          studentNo: '2025' + String(i + 1).padStart(3, '0'),
+          createdAt: now, updatedAt: now
+        });
+      });
+      DB.set('students', students);
+      if (typeof App !== 'undefined') App.updateHeader();
     }
+  },
+
+  // 创建七4班并导入其 64 名花名册（不会动七3班）
+  ensureClass4() {
+    if (!DB.get('dataSetupClass4Done')) this.createClass4();
   },
 
   // —— 七4班配置 ——
