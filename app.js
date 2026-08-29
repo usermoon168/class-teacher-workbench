@@ -252,14 +252,6 @@ function showSettings() {
       </div>
       <div class="list-action">›</div>
     </div>
-    <div class="list-item" onclick="DataSetup.confirmAndApply()" style="cursor:pointer;">
-      <div class="list-avatar" style="background:#e0e7ff;color:#3730a3;">📋</div>
-      <div class="list-content">
-        <div class="list-title" style="color:#3730a3;font-weight:600;">整理为七3班并导入花名册</div>
-        <div class="list-subtitle">删除其他三个班级，写入七3班 63 名学生（姓名/性别/电话/住址）</div>
-      </div>
-      <div class="list-action">›</div>
-    </div>
     <div class="list-item" style="cursor:default;">
       <div class="list-avatar" style="background:#fef3c7;color:#92400e;">ℹ️</div>
       <div class="list-content">
