@@ -4,10 +4,11 @@
  * 交互：基于 Pointer Events 的拖拽（鼠标 / 触摸通用），并保留点击选人 → 点击课桌放置的兜底方式。
  */
 const SeatingPage = {
-  groups: 3,          // 组数（默认 3 组）
-  rowsPerGroup: 4,    // 每组排数
-  desksPerRow: 2,     // 每组每排课桌数
+  groups: 3,          // 大组数（横向 3 个大组）
+  rowsPerGroup: 7,    // 全班纵向 7 行（每个大组 7 行）
+  desksPerRow: 3,     // 每个大组横向 3 列（课桌）
   perDesk: 3,         // 每桌人数（三人一桌）
+  layoutVersion: 2,   // 布局规格版本：变更后自动重置为“7 行 × 3 列 × 3 组”
   layout: [],         // [{ id, name, desks: [{ id, row, col, students: [{studentId, studentName}] }] }]
   mode: 'view',       // view / edit
   placingStudent: null, // 点击放置模式下选中的学生 {studentId, name, source, gi, di}
@@ -21,7 +22,7 @@ const SeatingPage = {
 
     let html = `
       <div class="page-title">🪑 座位安排</div>
-      <div class="page-subtitle">${this.groups} 组 · 三人一桌 · 拖拽排座</div>
+      <div class="page-subtitle">${this.rowsPerGroup} 行 · ${this.groups} 大组 · 三人一桌 · 拖拽排座</div>
     `;
 
     html += `
@@ -143,12 +144,18 @@ const SeatingPage = {
     if (data.length > 0) {
       const rec = data[0];
       if (rec.layout && Array.isArray(rec.layout) && rec.layout[0] && Array.isArray(rec.layout[0].desks)) {
-        // 新版结构
-        this.layout = rec.layout;
-        this.groups = rec.groups || this.layout.length;
-        this.rowsPerGroup = rec.rowsPerGroup || (this.layout[0] ? this.layout[0].desks.length : 4);
-        this.desksPerRow = rec.desksPerRow || 2;
-        this.perDesk = rec.perDesk || 3;
+        if (rec.version === this.layoutVersion) {
+          // 同版本：复用已保存布局
+          this.layout = rec.layout;
+          this.groups = rec.groups || this.layout.length;
+          this.rowsPerGroup = rec.rowsPerGroup || (this.layout[0] ? this.layout[0].desks.length : 7);
+          this.desksPerRow = rec.desksPerRow || 3;
+          this.perDesk = rec.perDesk || 3;
+        } else {
+          // 布局规格升级（版本不一致）→ 重置为“7 行 × 3 列 × 3 组”
+          this.buildDefaultLayout();
+          this.saveLayout();
+        }
       } else if (rec.layout && Array.isArray(rec.layout)) {
         // 旧版 {row,col,studentId,studentName} → 迁移
         this.migrateOld(rec.layout);
@@ -161,14 +168,8 @@ const SeatingPage = {
   },
 
   defaultOpts() {
-    const count = DB.getByClass('students').length;
-    const groups = 3;
-    const perDesk = 3;
-    const totalPods = Math.max(1, Math.ceil(count / perDesk));
-    const perGroup = Math.ceil(totalPods / groups);
-    const desksPerRow = 2;
-    const rowsPerGroup = Math.max(1, Math.ceil(perGroup / desksPerRow));
-    return { groups, rowsPerGroup, desksPerRow, perDesk };
+    // 固定布局：全班 7 行，横向 3 大组，每组 3 列（课桌），每桌 3 人
+    return { groups: 3, rowsPerGroup: 7, desksPerRow: 3, perDesk: 3 };
   },
 
   buildDefaultLayout(opts) {
@@ -402,6 +403,7 @@ const SeatingPage = {
   saveLayout() {
     const existing = DB.getByClass('seating');
     const data = {
+      version: this.layoutVersion,
       groups: this.groups,
       rowsPerGroup: this.rowsPerGroup,
       desksPerRow: this.desksPerRow,
