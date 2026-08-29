@@ -9,38 +9,35 @@ const DB = {
 
   // 初始化默认数据
   init() {
-    if (!this.get('classes')) {
-      this.set('classes', [
-        { id: 'class_qi_10', name: '七年级10班', grade: '七年级', classNo: '10', studentCount: 0 },
-        { id: 'class_1', name: '八年级10班', grade: '八年级', classNo: '10', studentCount: 0 },
-        { id: 'class_2', name: '七年级3班', grade: '七年级', classNo: '3', studentCount: 0 },
-        { id: 'class_3', name: '九年级5班', grade: '九年级', classNo: '5', studentCount: 0 },
-      ]);
-    }
-    this.currentClassId = this.get('currentClassId') || 'class_qi_10';
-
-    // 初始化各模块数据
+    // 需要在每次加载时确保的模块空数组
     const modules = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
       'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
-    modules.forEach(m => {
-      if (!this.get(m)) this.set(m, []);
-    });
 
-    // 如果七年级10班没有学生，插入真实数据
-    let students = this.get('students') || [];
-    let qi10Students = students.filter(s => s.classId === 'class_qi_10');
-    if (qi10Students.length === 0) {
+    // 一次性初始化：默认班级与示例数据只在首次执行，避免反复注入覆盖用户作业等真实数据
+    if (!this.get('ctw_init_done')) {
+      if (!this.get('classes')) {
+        this.set('classes', [
+          { id: 'class_qi_10', name: '七年级10班', grade: '七年级', classNo: '10',  studentCount: 0 },
+          { id: 'class_1', name: '八年级10班', grade: '八年级', classNo: '10', studentCount: 0 },
+          { id: 'class_2', name: '七年级3班', grade: '七年级', classNo: '3', studentCount: 0 },
+          { id: 'class_3', name: '九年级5班', grade: '九年级', classNo: '5', studentCount: 0 },
+        ]);
+      }
+      modules.forEach(m => { if (!this.get(m)) this.set(m, []); });
       this._insertRealData();
+      this._insertSampleData();
+      this.set('ctw_init_done', '1');
     }
 
-    // 如果八年级10班没有学生，插入示例数据
-    students = this.get('students') || [];
-    let class1Students = students.filter(s => s.classId === 'class_1');
-    if (class1Students.length === 0) {
-      this._insertSampleData();
-    }
+    this.currentClassId = this.get('currentClassId') || 'class_qi_10';
+    modules.forEach(m => { if (!this.get(m)) this.set(m, []); });
+
+    // 冗余保险：仅在确实缺失时补插示例数据（避免在非首次场景重复覆盖真实数据）
+    const students = this.get('students') || [];
+    if (students.filter(s => s.classId === 'class_qi_10').length === 0) this._insertRealData();
+    if (students.filter(s => s.classId === 'class_1').length === 0) this._insertSampleData();
   },
 
   get(key) {
@@ -457,7 +454,8 @@ const DB = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }];
-    this.set('homework', homework);
+    const existingHw = this.get('homework') || [];
+    this.set('homework', existingHw.concat(homework));
 
     // 作业提交记录
     const hwRecords = [];
