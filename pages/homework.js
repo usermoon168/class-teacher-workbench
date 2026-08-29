@@ -483,9 +483,18 @@ const HomeworkPage = {
       });
     }
 
-    // 刷新弹窗
-    Utils.closeModal();
-    setTimeout(() => this.showIncompletePicker(hwId), 200);
+    // 就地更新勾选状态，避免关闭/重建整个弹窗导致卡顿与弹窗叠加
+    if (element) {
+      const checked = !existing;
+      const avatar = element.querySelector('.list-avatar');
+      const sub = element.querySelector('.list-subtitle');
+      if (avatar) {
+        avatar.textContent = checked ? '☑' : '☐';
+        avatar.style.background = checked ? '#fee2e2' : 'var(--gray-100)';
+        avatar.style.color = checked ? 'var(--danger)' : 'var(--gray-400)';
+      }
+      if (sub) sub.textContent = checked ? '已标记未完成' : '已完成';
+    }
   },
 
   markComplete(recordId) {
