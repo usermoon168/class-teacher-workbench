@@ -122,10 +122,26 @@ const DataSetup = {
     });
     DB.set('students', students);
 
-    // 5. 刷新 UI
+    // 5. 标记已完成，避免重复执行
+    DB.set('dataSetupDone', '1');
+
+    // 6. 刷新 UI
     Utils.toast('已整理完成：仅保留七3班并导入 ' + this.ROSTER.length + ' 名学生', 'success', 2500);
     if (typeof App !== 'undefined') App.updateHeader();
     Utils.closeModal();
     if (typeof App !== 'undefined' && typeof currentPage !== 'undefined') App.navigate(currentPage);
+  },
+
+  // 打开页面时自动执行（仅一次）：删除其他班级并导入花名册
+  autoMigrateIfNeeded() {
+    if (DB.get('dataSetupDone')) return; // 已执行过，直接跳过
+    const classes = DB.get('classes') || [];
+    const hasOthers = classes.some(c => ['class_qi_10', 'class_1', 'class_3'].includes(c.id));
+    if (!hasOthers) {
+      // 已经是纯七3班了，标记完成即可
+      DB.set('dataSetupDone', '1');
+      return;
+    }
+    this.apply();
   }
 };
