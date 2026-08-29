@@ -122,13 +122,23 @@ const Utils = {
   },
 
   // 确认对话框
+  // 注意：回调通过引用调用，避免把函数序列化进 inline onclick 导致闭包 / this 丢失
+  _pendingConfirm: null,
   confirm(message, onConfirm, title = '确认') {
+    this._pendingConfirm = onConfirm;
     this.showModal(title, `
       <div style="padding: 10px 0; font-size: 15px; line-height: 1.6;">${message}</div>
     `, `
       <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
-      <button class="btn btn-primary" style="flex:1;" onclick="Utils.closeModal(); (${onConfirm})();">确定</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="Utils._runConfirm()">确定</button>
     `);
+  },
+
+  _runConfirm() {
+    const fn = this._pendingConfirm;
+    this._pendingConfirm = null;
+    if (typeof fn === 'function') fn();
+    this.closeModal();
   },
 
   // 获取头像首字母
