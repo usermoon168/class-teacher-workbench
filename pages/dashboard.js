@@ -70,6 +70,14 @@ const DashboardPage = {
           <div class="card-title">⚡ 快捷操作</div>
         </div>
         <div class="quick-grid">
+          <div class="quick-item" onclick="navigateTo('attendance')">
+            <div class="quick-icon" style="background:#f0fdf4;color:#166534;">📋</div>
+            <span>今日考勤</span>
+          </div>
+          <div class="quick-item" onclick="navigateTo('homework');setTimeout(()=>showHomeworkModal(),300)">
+            <div class="quick-icon" style="background:#d1fae5;color:#065f46;">📚</div>
+            <span>布置作业</span>
+          </div>
           <div class="quick-item" onclick="navigateTo('grades');setTimeout(()=>showGradeEntryModal(),300)">
             <div class="quick-icon" style="background:#dbeafe;color:#1e40af;">📝</div>
             <span>录入成绩</span>
@@ -81,10 +89,6 @@ const DashboardPage = {
           <div class="quick-item" onclick="navigateTo('leave');setTimeout(()=>showLeaveModal(),300)">
             <div class="quick-icon" style="background:#fef3c7;color:#92400e;">📋</div>
             <span>请假登记</span>
-          </div>
-          <div class="quick-item" onclick="navigateTo('homework');setTimeout(()=>showHomeworkModal(),300)">
-            <div class="quick-icon" style="background:#d1fae5;color:#065f46;">📚</div>
-            <span>布置作业</span>
           </div>
           <div class="quick-item" onclick="navigateTo('worklog');setTimeout(()=>showWorklogModal(),300)">
             <div class="quick-icon" style="background:#e0e7ff;color:#4338ca;">📅</div>
@@ -101,10 +105,6 @@ const DashboardPage = {
           <div class="quick-item" onclick="navigateTo('seating')">
             <div class="quick-icon" style="background:#fff7ed;color:#9a3412;">🪑</div>
             <span>座位表</span>
-          </div>
-          <div class="quick-item" onclick="navigateTo('attendance')">
-            <div class="quick-icon" style="background:#f0fdf4;color:#166534;">📋</div>
-            <span>今日考勤</span>
           </div>
           <div class="quick-item" onclick="navigateTo('randomname')">
             <div class="quick-icon" style="background:#faf5ff;color:#7e22ce;">🎲</div>
