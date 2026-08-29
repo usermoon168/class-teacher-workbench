@@ -7,6 +7,7 @@ let currentPage = 'dashboard';
 const App = {
   init() {
     DB.init();
+    if (typeof DataSetup !== 'undefined') DataSetup.autoMigrateIfNeeded();
     this.updateHeader();
     this.startClock();
     this.bindNavigation();
