@@ -101,6 +101,12 @@
         <button onclick="closeActionSheet()">✕</button>
       </div>
       <div class="action-sheet-grid">
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('attendance')">
+          <div class="action-icon">📋</div><span>今日考勤</span>
+        </div>
+        <div class="action-item" onclick="closeActionSheet(); navigateTo('homework'); setTimeout(()=>showHomeworkModal(),300)">
+          <div class="action-icon">📚</div><span>布置作业</span>
+        </div>
         <div class="action-item" onclick="closeActionSheet(); navigateTo('grades'); setTimeout(()=>showGradeEntryModal(),300)">
           <div class="action-icon">📝</div><span>录入成绩</span>
         </div>
@@ -109,9 +115,6 @@
         </div>
         <div class="action-item" onclick="closeActionSheet(); navigateTo('leave'); setTimeout(()=>showLeaveModal(),300)">
           <div class="action-icon">📋</div><span>请假登记</span>
-        </div>
-        <div class="action-item" onclick="closeActionSheet(); navigateTo('homework'); setTimeout(()=>showHomeworkModal(),300)">
-          <div class="action-icon">📚</div><span>布置作业</span>
         </div>
         <div class="action-item" onclick="closeActionSheet(); navigateTo('worklog'); setTimeout(()=>showWorklogModal(),300)">
           <div class="action-icon">📅</div><span>工作留痕</span>
@@ -124,9 +127,6 @@
         </div>
         <div class="action-item" onclick="closeActionSheet(); navigateTo('students'); setTimeout(()=>showStudentModal(),300)">
           <div class="action-icon">👤</div><span>添加学生</span>
-        </div>
-        <div class="action-item" onclick="closeActionSheet(); navigateTo('attendance')">
-          <div class="action-icon">📋</div><span>今日考勤</span>
         </div>
         <div class="action-item" onclick="closeActionSheet(); navigateTo('randomname')">
           <div class="action-icon">🎲</div><span>随机点名</span>
