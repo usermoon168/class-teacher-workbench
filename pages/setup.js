@@ -259,7 +259,7 @@ const DataSetup = {
     // 5. 标记完成
     DB.set('dataSetupClass4Done', '1');
     // 6. 提示
-    Utils.toast('已创建七4班并导入 ' + this.ROSTER_4.length + ' 名学生', 'success', 2500);
+    Utils.toast('已创建七4班并导入 ' + this.ROSTER_4.length + ' 名学生，已自动切换到七4班', 'success', 3000);
     if (typeof App !== 'undefined') App.updateHeader();
     if (typeof App !== 'undefined' && typeof currentPage !== 'undefined') App.navigate(currentPage);
   }
