@@ -33,11 +33,8 @@ const DB = {
 
     this.currentClassId = this.get('currentClassId') || 'class_qi_10';
     modules.forEach(m => { if (!this.get(m)) this.set(m, []); });
-
-    // 冗余保险：仅在确实缺失时补插示例数据（避免在非首次场景重复覆盖真实数据）
-    const students = this.get('students') || [];
-    if (students.filter(s => s.classId === 'class_qi_10').length === 0) this._insertRealData();
-    if (students.filter(s => s.classId === 'class_1').length === 0) this._insertSampleData();
+    // 注意：示例数据只在上方 ctw_init_done 一次性分支写入，此处不再重复插入，
+    // 否则每次刷新都会因示例班级被清理而重新注入并覆盖用户的真实作业/未完成记录。
   },
 
   get(key) {
@@ -476,7 +473,8 @@ const DB = {
         });
       });
     });
-    this.set('homeworkRecords', hwRecords);
+    const existingRecords = this.get('homeworkRecords') || [];
+    this.set('homeworkRecords', existingRecords.concat(hwRecords));
 
     // 插入示例工作留痕
     const worklogTypes = ['班会', '教研活动', '培训学习', '会议记录', '常规检查', '其他'];
