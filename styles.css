@@ -1411,6 +1411,7 @@ hidden { display: none !important; }
 
   .main-content {
     padding: 16px 20px;
+    padding-bottom: calc(var(--bottom-h) + 20px);
   }
 
   .form-row {
