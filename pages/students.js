@@ -255,12 +255,11 @@ const StudentsPage = {
     const classes = DB.get('classes') || [];
     const cur = DB.getCurrentClass();
     const opts = classes.map(c => `<option value="${c.id}" ${c.id === cur.id ? 'selected' : ''}>${c.name}</option>`).join('');
-    Utils.showModal('导入花名册（覆盖）', `
+    Utils.showModal('导入花名册', `
       <div class="form-group">
         <label class="form-label">目标班级</label>
         <select class="form-select" id="importClass">${opts}</select>
       </div>
-      <p style="font-size:12px;color:var(--danger);margin:6px 0 10px;">⚠️ 导入将<b>覆盖</b>所选班级的原有全部学生名单（不可恢复），请确认无误。</p>
       <div class="file-upload" onclick="document.getElementById('csvFile').click()">
         <div class="file-upload-icon">📁</div>
         <div id="importFileName">点击选择CSV文件</div>
