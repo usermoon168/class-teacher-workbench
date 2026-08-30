@@ -121,8 +121,11 @@ const TodoPage = {
     let html = '';
     sorted.forEach(n => {
       html += `
-        <div class="card" onclick="TodoPage.showNoteDetail('${n.id}')">
-          <div style="font-weight:600;">${n.title || '无标题'}</div>
+        <div class="card" onclick="TodoPage.showNoteDetail('${n.id}')" style="position:relative;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div style="font-weight:600;flex:1;">${n.title || '无标题'}</div>
+            <button class="btn btn-sm btn-icon" style="color:var(--gray-500);flex-shrink:0;" onclick="event.stopPropagation();showNoteModal('${n.id}')" title="编辑">✏️</button>
+          </div>
           <div style="font-size:13px;color:var(--gray-600);margin-top:4px;">${n.content.substring(0, 80)}${n.content.length > 80 ? '...' : ''}</div>
           <div style="font-size:11px;color:var(--gray-400);margin-top:6px;">${Utils.formatDate(n.createdAt, 'YYYY-MM-DD HH:mm')}</div>
         </div>
@@ -165,11 +168,12 @@ const TodoPage = {
     Utils.showModal('笔记详情', `
       <div class="card">
         <div style="font-weight:700;font-size:16px;">${note.title || '无标题'}</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">${Utils.formatDate(note.createdAt, 'YYYY-MM-DD HH:mm')}</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">${Utils.formatDate(note.createdAt, 'YYYY-MM-DD HH:mm')}${note.updatedAt && note.updatedAt > note.createdAt ? ' · ✏️ 编辑于 ' + Utils.formatDate(note.updatedAt, 'YYYY-MM-DD HH:mm') : ''}</div>
         <div style="margin-top:12px;font-size:14px;line-height:1.8;white-space:pre-wrap;">${note.content}</div>
       </div>
     `, `
       <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">关闭</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="editNoteFromDetail('${id}')">✏️ 编辑</button>
       <button class="btn btn-danger" style="flex:1;" onclick="deleteNote('${id}')">🗑 删除</button>
     `);
   },
@@ -284,6 +288,12 @@ function saveNote(id) {
   Utils.closeModal();
   TodoPage.render();
   Utils.toast('保存成功', 'success');
+}
+
+function editNoteFromDetail(id) {
+  // 先关闭详情弹窗（含 300ms 退场动画），再打开编辑弹窗，避免两个弹窗叠加
+  Utils.closeModal();
+  setTimeout(() => showNoteModal(id), 320);
 }
 
 function deleteNote(id) {
