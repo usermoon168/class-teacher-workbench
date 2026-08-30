@@ -273,7 +273,7 @@ const StudentsPage = {
       </div>
     `, `
       <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
-      <button class="btn btn-danger" style="flex:1;" id="importConfirmBtn" disabled onclick="StudentsPage.doImport()">导入并覆盖</button>
+      <button class="btn btn-danger" style="flex:1;" id="importConfirmBtn" disabled onclick="StudentsPage.doImport()">导入</button>
     `);
   },
 
