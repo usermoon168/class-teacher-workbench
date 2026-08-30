@@ -250,59 +250,114 @@ const StudentsPage = {
     document.getElementById(`tab-${tabName}`).style.display = 'block';
   },
 
-  // 导入
+  // 导入（覆盖模式）
   showImportModal() {
-    Utils.showModal('导入学生', `
+    const classes = DB.get('classes') || [];
+    const cur = DB.getCurrentClass();
+    const opts = classes.map(c => `<option value="${c.id}" ${c.id === cur.id ? 'selected' : ''}>${c.name}</option>`).join('');
+    Utils.showModal('导入花名册（覆盖）', `
+      <div class="form-group">
+        <label class="form-label">目标班级</label>
+        <select class="form-select" id="importClass">${opts}</select>
+      </div>
+      <p style="font-size:12px;color:var(--danger);margin:6px 0 10px;">⚠️ 导入将<b>覆盖</b>所选班级的原有全部学生名单（不可恢复），请确认无误。</p>
       <div class="file-upload" onclick="document.getElementById('csvFile').click()">
         <div class="file-upload-icon">📁</div>
-        <div>点击选择CSV文件</div>
+        <div id="importFileName">点击选择CSV文件</div>
         <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">
-          格式：姓名,学号,性别,出生日期,电话,家长姓名,家长电话,住址,住宿<br>
-          示例：张三,2024001,男,2010-05-15,13800000000,张父,13900000000,幸福路1号,走读
+          格式：姓名,学号,性别,出生日期,电话,家长姓名,家长电话,住址,住宿,职务
         </div>
       </div>
-      <input type="file" id="csvFile" accept=".csv" style="display:none;" onchange="StudentsPage.handleImport(event)">
+      <input type="file" id="csvFile" accept=".csv" style="display:none;" onchange="StudentsPage.onPickFile(event)">
       <div style="margin-top:12px;">
         <button class="btn btn-outline btn-block" onclick="StudentsPage.downloadTemplate()">下载模板</button>
       </div>
+    `, `
+      <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
+      <button class="btn btn-danger" style="flex:1;" id="importConfirmBtn" disabled onclick="StudentsPage.doImport()">导入并覆盖</button>
     `);
   },
 
-  handleImport(event) {
+  onPickFile(event) {
     const file = event.target.files[0];
-    if (!file) return;
+    this._pendingFile = file || null;
+    const label = document.getElementById('importFileName');
+    if (label) label.textContent = file ? ('已选择：' + file.name) : '点击选择CSV文件';
+    const btn = document.getElementById('importConfirmBtn');
+    if (btn) btn.disabled = !file;
+  },
+
+  doImport() {
+    const file = this._pendingFile;
+    if (!file) { Utils.toast('请先选择CSV文件', 'warning'); return; }
+    const classId = document.getElementById('importClass').value;
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = Utils.parseCSV(e.target.result);
-        let count = 0;
-        data.forEach(row => {
-          if (row['姓名'] || row['name']) {
-            DB.add('students', {
-              name: row['姓名'] || row['name'],
-              studentNo: row['学号'] || row['studentNo'] || '',
-              gender: row['性别'] || row['gender'] || '男',
-              birthday: row['出生日期'] || row['birthday'] || '',
-              phone: row['电话'] || row['phone'] || '',
-              parentName: row['家长姓名'] || row['parentName'] || '',
-              parentPhone: row['家长电话'] || row['parentPhone'] || '',
-              address: row['住址'] || row['address'] || '',
-              dorm: row['住宿'] || row['dorm'] || '走读',
-              note: '',
-              role: ''
-            });
-            count++;
-          }
+        // 兼容 UTF-8 / GBK(Excel默认) 编码
+        const bytes = new Uint8Array(e.target.result);
+        let text = new TextDecoder('utf-8').decode(bytes);
+        if (text.indexOf('�') !== -1) {
+          try { text = new TextDecoder('gbk').decode(bytes); } catch (_) {}
+        }
+        const rows = Utils.parseCSV(text);
+        const list = [];
+        rows.forEach(row => {
+          const name = (row['姓名'] || row['name'] || '').trim();
+          if (!name) return;
+          list.push({
+            name,
+            studentNo: (row['学号'] || row['studentNo'] || '').trim(),
+            gender: (row['性别'] || row['gender'] || '男').trim(),
+            birthday: (row['出生日期'] || row['birthday'] || '').trim(),
+            phone: (row['家长电话'] || row['电话'] || '').trim(),
+            parentName: (row['家长姓名'] || '').trim(),
+            parentPhone: (row['家长电话'] || '').trim(),
+            address: (row['住址'] || '').trim(),
+            dorm: (row['住宿'] || '走读').trim() || '走读',
+            role: (row['职务'] || '').trim(),
+            note: '',
+            classId
+          });
         });
+        if (list.length === 0) { Utils.toast('未解析到有效学生数据', 'error'); return; }
+
+        // 覆盖：删除该班原有学生，写入新名单
+        const existing = DB.get('students') || [];
+        const removedIds = new Set(existing.filter(s => s.classId === classId).map(s => s.id));
+        const kept = existing.filter(s => s.classId !== classId);
+        const now = new Date().toISOString();
+        const merged = kept.concat(list.map(it => ({ ...it, id: DB.genId(), createdAt: now, updatedAt: now })));
+        DB.set('students', merged);
+
+        // 更新班级人数
+        const classes = DB.get('classes') || [];
+        const ci = classes.findIndex(c => c.id === classId);
+        if (ci >= 0) { classes[ci].studentCount = list.length; DB.set('classes', classes); }
+
+        // 清理座位表中已删除学生的引用，避免幽灵名字
+        const seating = DB.get('seating') || [];
+        let seatChanged = false;
+        seating.forEach(rec => {
+          if (rec.layout) rec.layout.forEach(g => g.desks.forEach(d => {
+            const before = (d.students || []).length;
+            d.students = (d.students || []).filter(s => !removedIds.has(s.studentId));
+            if ((d.students || []).length !== before) seatChanged = true;
+          }));
+        });
+        if (seatChanged) DB.set('seating', seating);
+
+        const clsName = (classes[ci] && classes[ci].name) || '';
         Utils.closeModal();
         App.updateHeader();
         this.render();
-        Utils.toast(`成功导入 ${count} 名学生`, 'success');
+        Utils.toast(`已覆盖导入 ${list.length} 名学生（${clsName}）`, 'success');
+        if (seatChanged) Utils.toast('座位表已清除旧引用，建议重新自动排座', 'info');
       } catch (err) {
         Utils.toast('导入失败，请检查文件格式', 'error');
       }
     };
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsArrayBuffer(file);
   },
 
   downloadTemplate() {
