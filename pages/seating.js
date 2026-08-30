@@ -68,7 +68,10 @@ const SeatingPage = {
     html += '<div class="seating-podium">📋 讲台 / 黑板</div>';
     html += '<div class="seating-groups">';
 
-    this.layout.forEach((group, gi) => {
+    // 视觉顺序：第一组在最右，依次往左为第二、三组（data-gi 仍用真实索引，保证拖拽/点击正确）
+    const order = this.layout.map((g, i) => i).reverse();
+    order.forEach((gi, k) => {
+      const group = this.layout[gi];
       let gHtml = `
         <div class="seating-group">
           <div class="group-header">${group.name} <span class="group-count">${this.groupCount(gi)}人</span></div>
@@ -83,15 +86,15 @@ const SeatingPage = {
           gHtml += this.chipHtml(s.studentName, s.studentId, 'desk', gi, di, true);
         });
         // 空位占位
-        for (let k = desk.students.length; k < this.perDesk; k++) {
+        for (let kk = desk.students.length; kk < this.perDesk; kk++) {
           gHtml += `<div class="desk-slot"></div>`;
         }
         gHtml += '</div></div>';
       });
       gHtml += '</div></div>';
       html += gHtml;
-      // 组间过道（最后一组后不加）
-      if (gi < this.layout.length - 1) {
+      // 组间过道（视觉最后一组后不加）
+      if (k < order.length - 1) {
         html += `<div class="aisle"><span>过道</span></div>`;
       }
     });
@@ -482,7 +485,10 @@ const SeatingPage = {
     const cls = DB.getCurrentClass();
     const dateStr = Utils.today();
     let body = '';
-    this.layout.forEach((group, gi) => {
+    // 与界面一致：第一组在最右，依次往左（仅反转渲染顺序，索引仍用真实值）
+    const order = this.layout.map((g, i) => i).reverse();
+    order.forEach((gi, k) => {
+      const group = this.layout[gi];
       let table = `<table class="exp-table"><caption>${group.name}（${this.groupCount(gi)}人）</caption>`;
       for (let r = 0; r < this.rowsPerGroup; r++) {
         table += '<tr>';
@@ -498,7 +504,7 @@ const SeatingPage = {
       }
       table += '</table>';
       body += `<div class="exp-group">${table}</div>`;
-      if (gi < this.layout.length - 1) body += '<div class="exp-aisle">过道</div>';
+      if (k < order.length - 1) body += '<div class="exp-aisle">过道</div>';
     });
 
     const html = `
