@@ -304,6 +304,7 @@ const Utils = {
 
   // 读取 CSV 文件
   parseCSV(text) {
+        text = (text || '').replace(/^\uFEFF/, '');
     const lines = text.split('\n').filter(l => l.trim());
     if (lines.length === 0) return [];
     const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
