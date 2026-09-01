@@ -13,7 +13,7 @@ const DB = {
     const modules = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
 
     // 一次性初始化：默认班级与示例数据只在首次执行，避免反复注入覆盖用户作业等真实数据
     if (!this.get('ctw_init_done')) {
@@ -124,7 +124,7 @@ const DB = {
     const keys = ['classes', 'students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
     keys.forEach(k => result[k] = this.get(k));
     return result;
   },
@@ -141,7 +141,7 @@ const DB = {
     const keys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
     keys.forEach(k => {
       const data = this.get(k) || [];
       const filtered = data.filter(item => item.classId !== classId);
