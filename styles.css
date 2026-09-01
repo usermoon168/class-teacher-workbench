@@ -2200,3 +2200,93 @@ hidden { display: none !important; }
   background: var(--primary);
   color: #fff;
 }
+
+/* ========== 课程表·手机端紧凑（一屏显示） ========== */
+@media (max-width: 640px) {
+  .page-title {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+
+  .page-subtitle {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .tt-controls {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .tt-scope {
+    min-width: 160px;
+  }
+
+  .tt-scope-btn {
+    font-size: 12px;
+    padding: 6px 4px;
+  }
+
+  .tt-weekend-label {
+    font-size: 11px;
+  }
+
+  .tt-chip {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  .tt-scroll {
+    overflow-x: hidden;
+  }
+
+  .tt-table {
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  .tt-corner, .tt-period {
+    width: 40px;
+    padding: 5px 2px;
+    font-size: 10px;
+  }
+
+  .tt-th {
+    min-width: 0;
+    padding: 5px 2px;
+    font-size: 11px;
+  }
+
+  .tt-col-del {
+    font-size: 10px;
+    padding: 1px 2px;
+  }
+
+  .tt-td {
+    height: 34px;
+    padding: 2px;
+  }
+
+  .tt-cell {
+    padding: 2px 3px;
+  }
+
+  .tt-subject {
+    font-size: 12px;
+  }
+
+  /* 手机端只显示科目，隐藏教师/地点小字以节省空间（数据保留） */
+  .tt-meta {
+    display: none;
+  }
+
+  .tt-break td, .tt-segment td {
+    padding: 4px;
+    font-size: 11px;
+  }
+
+  .tt-tip {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+}
