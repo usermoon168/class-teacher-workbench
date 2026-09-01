@@ -92,7 +92,8 @@ const App = {
       meeting: () => MeetingPage.render(),
       randomname: () => RandomNamePage.render(),
       countdown: () => CountdownPage.render(),
-      todo: () => TodoPage.render()
+      todo: () => TodoPage.render(),
+      timetable: () => TimetablePage.render()
     };
 
     if (pageRenderers[page]) {
