@@ -2056,6 +2056,8 @@ hidden { display: none !important; }
 
 .tt-table {
   width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
   border-collapse: collapse;
   font-size: 13px;
   min-width: 560px;
@@ -2112,7 +2114,7 @@ hidden { display: none !important; }
 
 .tt-td {
   padding: 4px;
-  height: 54px;
+  height: 48px;
   vertical-align: top;
   cursor: pointer;
   transition: background 0.15s;
