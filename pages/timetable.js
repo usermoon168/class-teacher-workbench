@@ -13,7 +13,7 @@ const TT_PERIODS = [
   { no: 5, label: '第5节', part: 'afternoon' },
   { no: 6, label: '第6节', part: 'afternoon' },
   { no: 7, label: '第7节', part: 'afternoon' },
-  { no: 8, label: '第8节', part: 'afternoon' },
+  { no: 8, label: '第8节', part: 'service' },
   { no: 9, label: '第9节', part: 'service' }
 ];
 
