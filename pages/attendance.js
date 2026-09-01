@@ -5,6 +5,7 @@
 const AttendancePage = {
   currentTab: 'today',
   selectedMonth: '',
+  selectedDate: '',
 
   // 兼容旧数据：旧记录只有 status 字段（整天），新记录有 am/pm
   norm(r) {
@@ -55,6 +56,7 @@ const AttendancePage = {
       <div class="segment-control">
         <div class="segment-item ${this.currentTab === 'today' ? 'active' : ''}" onclick="AttendancePage.switchTab('today')">📝 今日考勤</div>
         <div class="segment-item ${this.currentTab === 'history' ? 'active' : ''}" onclick="AttendancePage.switchTab('history')">📅 历史记录</div>
+        <div class="segment-item ${this.currentTab === 'daily' ? 'active' : ''}" onclick="AttendancePage.switchTab('daily')">📆 每日汇总</div>
         <div class="segment-item ${this.currentTab === 'weekly' ? 'active' : ''}" onclick="AttendancePage.switchTab('weekly')">📊 周汇总</div>
         <div class="segment-item ${this.currentTab === 'monthly' ? 'active' : ''}" onclick="AttendancePage.switchTab('monthly')">📈 月度报表</div>
       </div>
@@ -64,6 +66,8 @@ const AttendancePage = {
       html += this.renderToday(students, todayRecord);
     } else if (this.currentTab === 'history') {
       html += this.renderHistory(attendance);
+    } else if (this.currentTab === 'daily') {
+      html += this.renderDaily(this.selectedDate || Utils.today());
     } else if (this.currentTab === 'weekly') {
       html += this.renderWeekly(attendance, students);
     } else {
@@ -627,6 +631,125 @@ const AttendancePage = {
 
     Utils.downloadFile(`${className}_${this.selectedMonth}_考勤报表.csv`, '\ufeff' + csv, 'text/csv');
     Utils.toast('报表已导出', 'success');
+  },
+
+  computeDaily(date) {
+    const attendance = DB.getByClass('attendance');
+    const students = DB.getByClass('students');
+    const record = attendance.find(a => a.date === date);
+    const studentMap = {};
+    let totalPeriods = 0, late = 0, leave = 0, absent = 0;
+    if (record) {
+      record.records.forEach(r => {
+        const n = this.norm(r);
+        [['am', n.am], ['pm', n.pm]].forEach(([period, st]) => {
+          totalPeriods++;
+          if (st === '出勤') return;
+          if (!studentMap[r.studentId]) studentMap[r.studentId] = { name: r.studentName, late: [], leave: [], absent: [] };
+          const suffix = period === 'am' ? '上午' : '下午';
+          if (st === '迟到') { studentMap[r.studentId].late.push(suffix); late++; }
+          else if (st === '请假') { studentMap[r.studentId].leave.push(suffix); leave++; }
+          else if (st === '旷课') { studentMap[r.studentId].absent.push(suffix); absent++; }
+        });
+      });
+    }
+    const attendRate = totalPeriods > 0 ? ((totalPeriods - late - leave - absent) / totalPeriods * 100).toFixed(0) : 0;
+    const present = record ? record.records.filter(r => { const n = this.norm(r); return n.am === '出勤' && n.pm === '出勤'; }).length : 0;
+    return { studentMap, late, leave, absent, attendRate, present, totalStudents: students.length, record };
+  },
+
+  renderDaily(date) {
+    const { studentMap, late, leave, absent, attendRate, present, totalStudents, record } = this.computeDaily(date);
+    const all = Object.values(studentMap);
+    const lateStudents = all.filter(s => s.late.length > 0);
+    const leaveStudents = all.filter(s => s.leave.length > 0);
+    const absentStudents = all.filter(s => s.absent.length > 0);
+
+    const block = (iconLabel, subLabel, colorBg, colorFg, colorText, list, key) => {
+      if (list.length === 0) return '';
+      let h = `<div style="margin-top:12px;font-weight:700;color:${colorText};margin-bottom:6px;">${iconLabel} (${list.length}人)</div>`;
+      list.forEach(s => {
+        h += `
+          <div class="list-item">
+            <div class="list-avatar" style="background:${colorBg};color:${colorFg};">${Utils.getInitial(s.name)}</div>
+            <div class="list-content">
+              <div class="list-title">${s.name}</div>
+              <div class="list-subtitle" style="color:${colorText};">${subLabel}${s[key].length}次（${s[key].join('、')}）</div>
+            </div>
+          </div>`;
+      });
+      return h;
+    };
+
+    let html = `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📆 每日考勤汇总</div>
+          <input type="date" class="form-input" style="width:auto;font-size:14px;" value="${date}" onchange="AttendancePage.changeDaily(this.value)">
+        </div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:10px;">${date} ${Utils.weekday(date)} · 应到 ${totalStudents} 人 · 全勤 ${present} 人</div>
+        <div class="stat-grid">
+          <div class="stat-card success"><div class="stat-value">${attendRate}%</div><div class="stat-label">出勤率</div></div>
+          <div class="stat-card success"><div class="stat-value">${present}</div><div class="stat-label">全勤人数</div></div>
+          <div class="stat-card warning"><div class="stat-value">${late}</div><div class="stat-label">迟到人次</div></div>
+          <div class="stat-card info"><div class="stat-value">${leave}</div><div class="stat-label">请假人次</div></div>
+          <div class="stat-card danger"><div class="stat-value">${absent}</div><div class="stat-label">旷课人次</div></div>
+        </div>
+        ${block('⏰ 迟到', '迟到', '#fef3c7', '#92400e', 'var(--warning)', lateStudents, 'late')}
+        ${block('📋 请假', '请假', '#dbeafe', '#1e40af', 'var(--info)', leaveStudents, 'leave')}
+        ${block('✕ 旷课', '旷课', '#fee2e2', '#991b1b', 'var(--danger)', absentStudents, 'absent')}
+    `;
+
+    if (lateStudents.length === 0 && leaveStudents.length === 0 && absentStudents.length === 0) {
+      html += record
+        ? `<div style="padding:12px;text-align:center;color:var(--success);">🎉 当日全员正常出勤！</div>`
+        : `<div style="padding:12px;text-align:center;color:var(--gray-500);">📋 当日暂无考勤记录</div>`;
+    }
+
+    html += `
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="AttendancePage.copyDaily()">📋 复制当日汇总（发班群）</button>
+        <button class="btn btn-outline" onclick="AttendancePage.exportDaily()">📥 导出</button>
+      </div>
+    `;
+    return html;
+  },
+
+  changeDaily(value) {
+    this.selectedDate = value;
+    this.render();
+  },
+
+  copyDaily() {
+    const date = this.selectedDate || Utils.today();
+    const { studentMap, late, leave, absent, attendRate, present, totalStudents } = this.computeDaily(date);
+    const cls = DB.getCurrentClass().name;
+    const all = Object.values(studentMap);
+    const lateS = all.filter(s => s.late.length > 0);
+    const leaveS = all.filter(s => s.leave.length > 0);
+    const absentS = all.filter(s => s.absent.length > 0);
+    let text = `📆 ${cls} ${date} 考勤汇总\n`;
+    text += `应到${totalStudents}人 · 全勤${present}人 · 出勤率${attendRate}%\n`;
+    text += `迟到${late}人次 · 请假${leave}人次 · 旷课${absent}人次\n━━━━━━━━━━━━\n`;
+    if (lateS.length) { text += '\n⏰ 迟到：\n'; lateS.forEach(s => text += `• ${s.name}（${s.late.join('、')}）\n`); }
+    if (leaveS.length) { text += '\n📋 请假：\n'; leaveS.forEach(s => text += `• ${s.name}（${s.leave.join('、')}）\n`); }
+    if (absentS.length) { text += '\n✕ 旷课：\n'; absentS.forEach(s => text += `• ${s.name}（${s.absent.join('、')}）\n`); }
+    if (!lateS.length && !leaveS.length && !absentS.length) text += '\n🎉 当日全员正常出勤！';
+    else text += '\n请家长关注孩子出勤情况，谢谢配合！';
+    HomeworkPage.copyToClipboard(text);
+  },
+
+  exportDaily() {
+    const date = this.selectedDate || Utils.today();
+    const { studentMap, late, leave, absent, attendRate, present, totalStudents } = this.computeDaily(date);
+    const cls = DB.getCurrentClass().name;
+    let csv = `${cls} ${date} 每日考勤汇总\n应到人数,全勤人数,出勤率,迟到人次,请假人次,旷课人次\n${totalStudents},${present},${attendRate}%,${late},${leave},${absent}\n\n姓名,迟到时段,请假时段,旷课时段\n`;
+    Object.values(studentMap).forEach(s => {
+      csv += `${s.name},${s.late.join('；')},${s.leave.join('；')},${s.absent.join('；')}\n`;
+    });
+    Utils.downloadFile(`${cls}_${date}_考勤汇总.csv`, '\ufeff' + csv, 'text/csv');
+    Utils.toast('已导出', 'success');
   },
 
   switchTab(tab) {
