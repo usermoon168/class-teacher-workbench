@@ -2277,9 +2277,16 @@ hidden { display: none !important; }
     font-size: 12px;
   }
 
-  /* 手机端只显示科目，隐藏教师/地点小字以节省空间（数据保留） */
+  /* 手机端显示上课地点/教师（极小字，仍保持一屏） */
   .tt-meta {
-    display: none;
+    display: block;
+    font-size: 9px;
+    line-height: 1.2;
+    margin-top: 1px;
+    color: var(--gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .tt-break td, .tt-segment td {
