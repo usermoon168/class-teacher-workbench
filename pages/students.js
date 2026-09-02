@@ -102,6 +102,15 @@ const StudentsPage = {
     this.searchKey = key;
     this.currentPage = 1;
     this.render();
+    // 重建 DOM 后重新聚焦搜索框，避免每次按键因节点替换丢失焦点而无法连续输入
+    setTimeout(() => {
+      const inp = document.querySelector('input[placeholder*="搜索学生"]');
+      if (inp) {
+        inp.focus();
+        const len = inp.value.length;
+        try { inp.setSelectionRange(len, len); } catch (_) {}
+      }
+    }, 0);
   },
 
   goToPage(page) {
