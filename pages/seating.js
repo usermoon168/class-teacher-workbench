@@ -518,17 +518,19 @@ const SeatingPage = {
 
     const style = `
       <style>
-        body{font-family:'Microsoft YaHei',sans-serif;padding:24px;}
-        .exp-wrap{max-width:900px;margin:0 auto;}
-        h2{text-align:center;margin:0 0 6px;}
-        .exp-date{text-align:center;color:#666;margin:0 0 16px;font-size:14px;}
-        .exp-podium{text-align:center;padding:10px;background:#e5e7eb;border-radius:8px;margin-bottom:16px;}
-        .exp-groups{display:flex;align-items:flex-start;gap:8px;justify-content:center;flex-wrap:wrap;}
-        .exp-group{flex:1;min-width:200px;}
-        .exp-aisle{writing-mode:vertical-rl;color:#9ca3af;font-size:13px;padding:0 4px;border-left:2px dashed #d1d5db;border-right:2px dashed #d1d5db;}
-        .exp-table{width:100%;border-collapse:collapse;}
-        .exp-table caption{font-weight:700;padding:6px;background:#eef2ff;color:#4f46e5;}
-        .exp-table td{border:2px solid #4f46e5;height:54px;text-align:center;vertical-align:middle;font-size:14px;font-weight:600;padding:4px;}
+        @page{size:A4 landscape;margin:12mm;}
+        body{font-family:'Microsoft YaHei',sans-serif;padding:12px;margin:0;}
+        .exp-wrap{width:100%;}
+        h2{text-align:center;margin:0 0 4px;font-size:22px;}
+        .exp-date{text-align:center;color:#666;margin:0 0 12px;font-size:13px;}
+        .exp-podium{text-align:center;padding:8px;background:#e5e7eb;border-radius:6px;margin-bottom:12px;font-size:14px;}
+        /* 各小组横向并排（并列），不换行，按列数等比压缩 */
+        .exp-groups{display:flex;align-items:stretch;gap:6px;justify-content:center;flex-wrap:nowrap;}
+        .exp-group{flex:1 1 0;min-width:0;}
+        .exp-aisle{writing-mode:vertical-rl;color:#9ca3af;font-size:12px;padding:0 2px;border-left:2px dashed #d1d5db;border-right:2px dashed #d1d5db;align-self:stretch;}
+        .exp-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+        .exp-table caption{font-weight:700;padding:4px;background:#eef2ff;color:#4f46e5;font-size:13px;}
+        .exp-table td{border:2px solid #4f46e5;height:46px;text-align:center;vertical-align:middle;font-size:13px;font-weight:600;padding:2px;overflow:hidden;}
         @media print{.noprint{display:none;}}
       </style>
     `;
