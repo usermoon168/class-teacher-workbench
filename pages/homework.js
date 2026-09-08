@@ -58,6 +58,25 @@ const HomeworkPage = {
     document.getElementById('mainContent').innerHTML = html;
   },
 
+  // 通过学生ID反查学号（历史记录未冗余学号字段，需实时回查学生表）
+  getStudentNo(studentId) {
+    if (!studentId) return '';
+    const s = (DB.get('students') || []).find(x => x.id === studentId);
+    return (s && s.studentNo) || '';
+  },
+
+  // "学号 姓名" 纯文本（复制/导出用，无学号时降级为仅姓名）
+  formatName(studentId, name) {
+    const no = this.getStudentNo(studentId);
+    return no ? `${no} ${name || ''}`.trim() : (name || '');
+  },
+
+  // "学号 + 姓名" HTML（界面展示用）
+  nameWithNoHtml(studentId, name) {
+    const no = this.getStudentNo(studentId);
+    return no ? `<span class="student-no">${no}</span>${name || ''}` : (name || '');
+  },
+
   // 作业列表
   renderList(homeworks, records, students) {
     if (homeworks.length === 0) {
@@ -129,7 +148,7 @@ const HomeworkPage = {
           <div style="font-size:12px;color:var(--gray-500);">布置：${h.assignedDate} | 截止：${h.dueDate}</div>
           <div style="font-size:13px;margin-top:2px;">
             ${incomplete.length > 0
-              ? `<span style="color:var(--danger);">⚠️ ${incomplete.length}人未完成：${incomplete.map(r => r.studentName).join('、')}</span>`
+              ? `<span style="color:var(--danger);">⚠️ ${incomplete.length}人未完成：${incomplete.map(r => this.formatName(r.studentId, r.studentName)).join('、')}</span>`
               : `<span style="color:var(--success);">✅ 全部完成</span>`
             }
           </div>
@@ -144,7 +163,7 @@ const HomeworkPage = {
       const incomplete = records.filter(r => r.homeworkId === h.id && r.status === '未完成');
       incomplete.forEach(r => {
         if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = { name: r.studentName, count: 0, homeworks: [] };
+          studentMap[r.studentId] = { id: r.studentId, name: r.studentName, count: 0, homeworks: [] };
         }
         studentMap[r.studentId].count++;
         studentMap[r.studentId].homeworks.push(`${h.subject}·${h.title}`);
@@ -162,7 +181,7 @@ const HomeworkPage = {
           <div class="list-item">
             <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${i + 1}</div>
             <div class="list-content">
-              <div class="list-title">${s.name}</div>
+              <div class="list-title">${this.nameWithNoHtml(s.id, s.name)}</div>
               <div class="list-subtitle" style="color:var(--danger);">${s.count}次未完成：${s.homeworks.join('、')}</div>
             </div>
           </div>
@@ -198,7 +217,7 @@ const HomeworkPage = {
       const incomplete = records.filter(r => r.homeworkId === h.id && r.status === '未完成');
       incomplete.forEach(r => {
         if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = { name: r.studentName, count: 0, homeworks: [] };
+          studentMap[r.studentId] = { id: r.studentId, name: r.studentName, count: 0, homeworks: [] };
         }
         studentMap[r.studentId].count++;
         studentMap[r.studentId].homeworks.push(`${h.subject}·${h.title}`);
@@ -210,7 +229,7 @@ const HomeworkPage = {
     if (studentList.length > 0) {
       text += `\n以下同学有未完成作业：\n`;
       studentList.forEach((s, i) => {
-        text += `${i + 1}. ${s.name} - ${s.count}次未完成（${s.homeworks.join('、')}）\n`;
+        text += `${i + 1}. ${this.formatName(s.id, s.name)} - ${s.count}次未完成（${s.homeworks.join('、')}）\n`;
       });
       text += `\n请家长督促完成，谢谢配合！`;
     } else {
@@ -227,14 +246,14 @@ const HomeworkPage = {
     const className = DB.getCurrentClass().name;
 
     let csv = `${className} 本周作业汇总 (${weekRange.start}~${weekRange.end})\n\n`;
-    csv += '姓名,未完成次数,未完成作业\n';
+    csv += '学号,姓名,未完成次数,未完成作业\n';
 
     const studentMap = {};
     homeworks.forEach(h => {
       const incomplete = records.filter(r => r.homeworkId === h.id && r.status === '未完成');
       incomplete.forEach(r => {
         if (!studentMap[r.studentId]) {
-          studentMap[r.studentId] = { name: r.studentName, count: 0, homeworks: [] };
+          studentMap[r.studentId] = { id: r.studentId, name: r.studentName, count: 0, homeworks: [] };
         }
         studentMap[r.studentId].count++;
         studentMap[r.studentId].homeworks.push(`${h.subject}·${h.title}`);
@@ -242,7 +261,7 @@ const HomeworkPage = {
     });
 
     Object.values(studentMap).sort((a, b) => b.count - a.count).forEach(s => {
-      csv += `${s.name},${s.count}次,${s.homeworks.join('；')}\n`;
+      csv += `${this.getStudentNo(s.id)},${s.name},${s.count}次,${s.homeworks.join('；')}\n`;
     });
 
     Utils.downloadFile(`${className}_本周作业汇总_${weekRange.start}.csv`, '\ufeff' + csv, 'text/csv');
@@ -285,7 +304,7 @@ const HomeworkPage = {
           <div class="list-item" onclick="HomeworkPage.showStudentProfile('${s.student.id}')">
             <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${Utils.getInitial(s.student.name)}</div>
             <div class="list-content">
-              <div class="list-title">${s.student.name}</div>
+              <div class="list-title">${this.nameWithNoHtml(s.student.id, s.student.name)}</div>
               <div class="list-subtitle" style="color:var(--danger);">未完成${s.incompleteCount}次 · 完成率${s.rate}%</div>
             </div>
             <span class="tag tag-danger">需关注</span>
@@ -306,7 +325,7 @@ const HomeworkPage = {
         <div class="list-item" onclick="HomeworkPage.showStudentProfile('${s.student.id}')">
           <div class="list-avatar" style="background:${isWarning ? '#fee2e2' : 'var(--primary-bg)'};color:${isWarning ? 'var(--danger)' : 'var(--primary)'};">${Utils.getInitial(s.student.name)}</div>
           <div class="list-content">
-            <div class="list-title">${s.student.name} ${isWarning ? '<span class="tag tag-danger" style="font-size:10px;">未完成' + s.incompleteCount + '</span>' : ''}</div>
+            <div class="list-title">${this.nameWithNoHtml(s.student.id, s.student.name)} ${isWarning ? '<span class="tag tag-danger" style="font-size:10px;">未完成' + s.incompleteCount + '</span>' : ''}</div>
             <div class="list-subtitle">完成率${s.rate}% | 共${s.totalCount}次作业，未完成${s.incompleteCount}次</div>
           </div>
           <div class="list-action">›</div>
@@ -409,7 +428,7 @@ const HomeworkPage = {
           <div class="list-item">
             <div class="list-avatar" style="background:#fee2e2;color:#991b1b;">${Utils.getInitial(r.studentName)}</div>
             <div class="list-content">
-              <div class="list-title">${r.studentName}</div>
+              <div class="list-title">${this.nameWithNoHtml(r.studentId, r.studentName)}</div>
               <div class="list-subtitle" style="color:var(--danger);">未完成${r.note ? ' - ' + r.note : ''}</div>
             </div>
             <button class="btn btn-sm btn-success" onclick="HomeworkPage.markComplete('${r.id}')">标记完成</button>
@@ -449,7 +468,7 @@ const HomeworkPage = {
         <div class="list-item" onclick="HomeworkPage.toggleIncomplete('${hwId}', '${s.id}', this)" style="cursor:pointer;">
           <div class="list-avatar" style="background:${isChecked ? '#fee2e2' : 'var(--gray-100)'};color:${isChecked ? 'var(--danger)' : 'var(--gray-400)'};font-size:18px;">${isChecked ? '☑' : '☐'}</div>
           <div class="list-content">
-            <div class="list-title">${s.name}</div>
+            <div class="list-title">${this.nameWithNoHtml(s.id, s.name)}</div>
             <div class="list-subtitle">${isChecked ? '已标记未完成' : '已完成'}</div>
           </div>
         </div>
@@ -517,7 +536,7 @@ const HomeworkPage = {
     if (records.length > 0) {
       text += `以下${records.length}位同学未完成：\n`;
       records.forEach((r, i) => {
-        text += `${i + 1}. ${r.studentName}\n`;
+        text += `${i + 1}. ${this.formatName(r.studentId, r.studentName)}\n`;
       });
       text += `\n请家长督促完成，谢谢配合！`;
     } else {
