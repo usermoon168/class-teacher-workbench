@@ -13,7 +13,8 @@ const DB = {
     const modules = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable',
+      'rewards', 'evalPlans'];
 
     // 一次性初始化：默认班级与示例数据只在首次执行，避免反复注入覆盖用户作业等真实数据
     if (!this.get('ctw_init_done')) {
@@ -33,8 +34,28 @@ const DB = {
 
     this.currentClassId = this.get('currentClassId') || 'class_qi_10';
     modules.forEach(m => { if (!this.get(m)) this.set(m, []); });
+    // 奖励类型为全局配置（不区分班级）：仅在该键从未创建过时写入默认值，
+    // 用户自行删空后不会被强行恢复
+    if (this.get('rewardTypes') === null) this.set('rewardTypes', this._defaultRewardTypes());
     // 注意：示例数据只在上方 ctw_init_done 一次性分支写入，此处不再重复插入，
     // 否则每次刷新都会因示例班级被清理而重新注入并覆盖用户的真实作业/未完成记录。
+  },
+
+  // 默认奖励类型与分值
+  _defaultRewardTypes() {
+    const raw = [
+      ['口头表扬', 1, '👍'], ['课堂表现', 1, '🙋'], ['作业优秀', 2, '📚'],
+      ['劳动积极', 2, '🧹'], ['纪律模范', 2, '✅'], ['进步之星', 3, '📈'],
+      ['助人之星', 3, '🤝'], ['拾金不昧', 5, '💎'], ['其他奖励', 1, '⭐']
+    ];
+    return raw.map(([name, points, icon], i) => ({
+      id: 'rt_' + (i + 1),
+      name: name,
+      points: points,
+      icon: icon,
+      active: true,
+      createdAt: new Date().toISOString()
+    }));
   },
 
   get(key) {
@@ -124,7 +145,8 @@ const DB = {
     const keys = ['classes', 'students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable',
+      'rewards', 'rewardTypes', 'evalPlans'];
     keys.forEach(k => result[k] = this.get(k));
     return result;
   },
@@ -141,7 +163,8 @@ const DB = {
     const keys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'timetable',
+      'rewards', 'evalPlans'];
     keys.forEach(k => {
       const data = this.get(k) || [];
       const filtered = data.filter(item => item.classId !== classId);

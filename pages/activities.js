@@ -7,13 +7,12 @@ const ActivitiesPage = {
   render() {
     let html = `
       <div class="page-title">🎉 班级活动</div>
-      <div class="page-subtitle">班会 · 活动档案 · 获奖记录 · 值日安排</div>
+      <div class="page-subtitle">班会 · 活动档案 · 值日安排</div>
     `;
 
     html += `
       <div class="toolbar">
         <button class="btn btn-primary btn-sm" onclick="showActivityModal()" id="addActBtn">+ 添加活动</button>
-        <button class="btn btn-outline btn-sm" onclick="showAwardModal()" id="addAwardBtn">+ 获奖记录</button>
         <button class="btn btn-outline btn-sm" onclick="showDutyModal()" id="addDutyBtn">+ 值日安排</button>
       </div>
     `;
@@ -21,15 +20,12 @@ const ActivitiesPage = {
     html += `
       <div class="segment-control">
         <div class="segment-item ${this.currentTab === 'activities' ? 'active' : ''}" onclick="ActivitiesPage.switchTab('activities')">🎊 活动档案</div>
-        <div class="segment-item ${this.currentTab === 'awards' ? 'active' : ''}" onclick="ActivitiesPage.switchTab('awards')">🏆 获奖记录</div>
         <div class="segment-item ${this.currentTab === 'duty' ? 'active' : ''}" onclick="ActivitiesPage.switchTab('duty')">🧹 值日安排</div>
       </div>
     `;
 
     if (this.currentTab === 'activities') {
       html += this.renderActivities();
-    } else if (this.currentTab === 'awards') {
-      html += this.renderAwards();
     } else if (this.currentTab === 'duty') {
       html += this.renderDuty();
     }
@@ -57,38 +53,6 @@ const ActivitiesPage = {
         </div>
       `;
     });
-    return html;
-  },
-
-  renderAwards() {
-    const awards = DB.getByClass('awards');
-    if (awards.length === 0) {
-      return Utils.emptyState('🏆', '暂无获奖记录');
-    }
-    const sorted = [...awards].sort((a, b) => b.date.localeCompare(a.date));
-    let html = `
-      <div class="stat-grid">
-        <div class="stat-card warning"><div class="stat-value">${awards.length}</div><div class="stat-label">总获奖数</div></div>
-        <div class="stat-card success"><div class="stat-value">${awards.filter(a => a.level === '国家级').length}</div><div class="stat-label">国家级</div></div>
-        <div class="stat-card info"><div class="stat-value">${awards.filter(a => a.level === '省级').length}</div><div class="stat-label">省级</div></div>
-        <div class="stat-card"><div class="stat-value">${awards.filter(a => a.level === '市级').length}</div><div class="stat-label">市级</div></div>
-      </div>
-      <div class="card" style="padding:0;">
-    `;
-    sorted.forEach(a => {
-      const levelColor = a.level === '国家级' ? 'danger' : a.level === '省级' ? 'warning' : a.level === '市级' ? 'info' : a.level === '校级' ? 'success' : 'gray';
-      html += `
-        <div class="list-item" onclick="ActivitiesPage.showAwardDetail('${a.id}')">
-          <div class="list-avatar" style="background:#fef3c7;color:#92400e;">🏆</div>
-          <div class="list-content">
-            <div class="list-title">${a.awardName}</div>
-            <div class="list-subtitle">${a.studentName} · ${a.date} · ${a.organization}</div>
-          </div>
-          <span class="tag tag-${levelColor}">${a.level}</span>
-        </div>
-      `;
-    });
-    html += '</div>';
     return html;
   },
 
@@ -153,26 +117,6 @@ const ActivitiesPage = {
     `, `
       <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">关闭</button>
       <button class="btn btn-danger" style="flex:1;" onclick="deleteActivity('${id}')">🗑 删除</button>
-    `);
-  },
-
-  showAwardDetail(id) {
-    const award = (DB.get('awards') || []).find(a => a.id === id);
-    if (!award) return;
-    Utils.showModal('获奖详情', `
-      <div class="card">
-        <div style="font-weight:700;font-size:16px;">🏆 ${award.awardName}</div>
-        <div style="display:grid;gap:8px;margin-top:12px;font-size:14px;">
-          <div><span style="color:var(--gray-500);">获奖人：</span>${award.studentName}</div>
-          <div><span style="color:var(--gray-500);">级别：</span><span class="tag tag-${award.level === '国家级' ? 'danger' : award.level === '省级' ? 'warning' : award.level === '市级' ? 'info' : 'success'}">${award.level}</span></div>
-          <div><span style="color:var(--gray-500);">日期：</span>${award.date}</div>
-          <div><span style="color:var(--gray-500);">颁发单位：</span>${award.organization}</div>
-          <div><span style="color:var(--gray-500);">描述：</span>${award.description || ''}</div>
-        </div>
-      </div>
-    `, `
-      <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">关闭</button>
-      <button class="btn btn-danger" style="flex:1;" onclick="deleteAward('${id}')">🗑 删除</button>
     `);
   },
 
@@ -256,97 +200,6 @@ function saveActivity(id) {
 function deleteActivity(id) {
   Utils.confirm('确定要删除吗？', () => {
     DB.delete('activities', id);
-    Utils.closeModal();
-    ActivitiesPage.render();
-    Utils.toast('已删除', 'success');
-  });
-}
-
-// 获奖记录
-function showAwardModal(id) {
-  const award = id ? (DB.get('awards') || []).find(a => a.id === id) : null;
-  const isEdit = !!award;
-  const students = DB.getByClass('students');
-
-  Utils.showModal(isEdit ? '编辑获奖' : '添加获奖记录', `
-    <div class="form-group">
-      <label class="form-label">学生姓名 *</label>
-      ${students.length > 0 ?
-        `<select class="form-select" id="awStudent" onchange="document.getElementById('awStudentName').value=this.options[this.selectedIndex].text">
-          <option value="">请选择</option>
-          ${students.map(s => `<option value="${s.name}" ${award?.studentName === s.name ? 'selected' : ''}>${s.name}</option>`).join('')}
-        </select>` :
-        `<input class="form-input" id="awStudentName" value="${award?.studentName || ''}" placeholder="学生姓名">`
-      }
-      <input type="hidden" id="awStudentName" value="${award?.studentName || ''}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">奖项名称 *</label>
-      <input class="form-input" id="awName" value="${award?.awardName || ''}" placeholder="如：数学竞赛一等奖">
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">级别</label>
-        <select class="form-select" id="awLevel">
-          <option value="校级" ${award?.level === '校级' ? 'selected' : ''}>校级</option>
-          <option value="区级" ${award?.level === '区级' ? 'selected' : ''}>区级</option>
-          <option value="市级" ${award?.level === '市级' ? 'selected' : ''}>市级</option>
-          <option value="省级" ${award?.level === '省级' ? 'selected' : ''}>省级</option>
-          <option value="国家级" ${award?.level === '国家级' ? 'selected' : ''}>国家级</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">日期</label>
-        <input class="form-input" id="awDate" type="date" value="${award?.date || Utils.today()}">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">颁发单位</label>
-      <input class="form-input" id="awOrg" value="${award?.organization || ''}" placeholder="如：市教育局">
-    </div>
-    <div class="form-group">
-      <label class="form-label">描述</label>
-      <textarea class="form-textarea" id="awDesc">${award?.description || ''}</textarea>
-    </div>
-  `, `
-    <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
-    <button class="btn btn-primary" style="flex:1;" onclick="saveAward(${isEdit ? `'${id}'` : 'null'})">保存</button>
-  `);
-}
-
-function saveAward(id) {
-  let studentName = document.getElementById('awStudentName').value;
-  const select = document.getElementById('awStudent');
-  if (select && select.value) {
-    studentName = select.value;
-  }
-  if (!studentName) {
-    Utils.toast('请选择/输入学生姓名', 'error');
-    return;
-  }
-  const awardName = document.getElementById('awName').value.trim();
-  if (!awardName) {
-    Utils.toast('请输入奖项名称', 'error');
-    return;
-  }
-  const data = {
-    studentName: studentName,
-    awardName: awardName,
-    level: document.getElementById('awLevel').value,
-    date: document.getElementById('awDate').value,
-    organization: document.getElementById('awOrg').value.trim(),
-    description: document.getElementById('awDesc').value.trim()
-  };
-  if (id) DB.update('awards', id, data);
-  else DB.add('awards', data);
-  Utils.closeModal();
-  ActivitiesPage.render();
-  Utils.toast('保存成功', 'success');
-}
-
-function deleteAward(id) {
-  Utils.confirm('确定要删除吗？', () => {
-    DB.delete('awards', id);
     Utils.closeModal();
     ActivitiesPage.render();
     Utils.toast('已删除', 'success');

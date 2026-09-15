@@ -128,6 +128,8 @@ const StudentsPage = {
     const leaves = DB.getByClass('leaves').filter(l => l.studentId === id);
     const talks = DB.getByClass('talks').filter(t => t.studentId === id);
     const awards = DB.getByClass('awards').filter(a => a.studentName === student.name);
+    const rewards = DB.getByClass('rewards').filter(r => r.studentId === id || (!r.studentId && r.studentName === student.name));
+    const rewardPoints = rewards.reduce((sum, r) => sum + (Number(r.points) || 0), 0);
     const homeworkRecords = DB.getByClass('homeworkRecords').filter(h => h.studentId === id);
 
     const avatarColor = Utils.getColorFromName(student.name);
@@ -176,6 +178,24 @@ const StudentsPage = {
             </div>
           `).join('') : '<div style="color:var(--gray-400);font-size:13px;text-align:center;padding:12px;">暂无获奖记录</div>'}
         </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🏅 奖励记录 <span class="tag tag-success" style="margin-left:6px;">${rewardPoints} 分</span></div>
+            <button class="btn btn-sm btn-outline" onclick="Utils.closeModal();navigateTo('rewards');setTimeout(()=>RewardsPage.showStudentProfile('${id}'),300)">完整档案 ›</button>
+          </div>
+          ${rewards.length > 0 ? rewards.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5).map(r => {
+            const pts = Number(r.points) || 0;
+            return `
+            <div class="list-item" style="padding:8px 0;cursor:default;">
+              <div class="list-avatar" style="background:var(--primary-bg);color:var(--primary);width:32px;height:32px;font-size:14px;">${r.icon || '⭐'}</div>
+              <div class="list-content">
+                <div class="list-title">${r.typeName || '奖励'}</div>
+                <div class="list-subtitle">${r.date || ''}${r.reason ? ' · ' + r.reason : ''}</div>
+              </div>
+              <span class="tag ${pts >= 0 ? 'tag-success' : 'tag-danger'}">${pts >= 0 ? '+' : ''}${pts}</span>
+            </div>
+          `; }).join('') : '<div style="color:var(--gray-400);font-size:13px;text-align:center;padding:12px;">暂无奖励记录</div>'}
+        </div>
       </div>
 
       <div id="tab-grades" class="tab-panel" style="display:none;">
@@ -192,7 +212,7 @@ const StudentsPage = {
                 <div class="stat-card info"><div class="stat-value">${g.average}</div><div class="stat-label">平均分</div></div>
               </div>
               <div style="margin-top:8px;">
-                ${Object.entries(g.scores).map(([subj, score]) => `
+                ${Object.entries(g.scores || {}).map(([subj, score]) => `
                   <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--gray-100);">
                     <span style="color:var(--gray-600);">${subj}</span>
                     <span style="font-weight:600;color:${score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)'};">${score}</span>
@@ -466,6 +486,17 @@ const StudentsPage = {
       content += '<h2>六、获奖记录</h2><table><tr><th>奖项</th><th>级别</th><th>日期</th><th>颁发单位</th></tr>';
       awards.forEach(a => {
         content += `<tr><td>${a.awardName}</td><td>${a.level}</td><td>${a.date}</td><td>${a.organization}</td></tr>`;
+      });
+      content += '</table>';
+    }
+
+    const rewards = DB.getByClass('rewards').filter(r => r.studentId === id || (!r.studentId && r.studentName === student.name));
+    if (rewards.length > 0) {
+      const totalRewardPoints = rewards.reduce((sum, r) => sum + (Number(r.points) || 0), 0);
+      content += `<h2>七、奖励记录（累计 ${totalRewardPoints} 分）</h2>`;
+      content += '<table><tr><th>日期</th><th>奖励类型</th><th>积分</th><th>事由</th></tr>';
+      rewards.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(r => {
+        content += `<tr><td>${r.date || ''}</td><td>${r.typeName || ''}</td><td>${r.points >= 0 ? '+' : ''}${r.points || 0}</td><td>${r.reason || ''}</td></tr>`;
       });
       content += '</table>';
     }

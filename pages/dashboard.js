@@ -86,6 +86,10 @@ const DashboardPage = {
             <div class="quick-icon" style="background:#fee2e2;color:#991b1b;">⚠️</div>
             <span>记录违纪</span>
           </div>
+          <div class="quick-item" onclick="navigateTo('rewards');setTimeout(()=>showRewardModal(),300)">
+            <div class="quick-icon" style="background:#fef3c7;color:#92400e;">🏅</div>
+            <span>记录奖励</span>
+          </div>
           <div class="quick-item" onclick="navigateTo('leave');setTimeout(()=>showLeaveModal(),300)">
             <div class="quick-icon" style="background:#fef3c7;color:#92400e;">📋</div>
             <span>请假登记</span>
@@ -216,6 +220,48 @@ const DashboardPage = {
           </div>
         </div>
       `;
+    }
+
+    // 本月奖励榜
+    const rewards = DB.getByClass('rewards');
+    const rewardMonthRange = Utils.getMonthRange();
+    const monthRewards = rewards.filter(r => r.date >= rewardMonthRange.start && r.date <= rewardMonthRange.end);
+    if (monthRewards.length > 0) {
+      const pointMap = {};
+      monthRewards.forEach(r => {
+        const key = r.studentId || r.studentName;
+        if (!pointMap[key]) pointMap[key] = { name: r.studentName, points: 0, count: 0 };
+        pointMap[key].points += Number(r.points) || 0;
+        pointMap[key].count += 1;
+      });
+      const top = Object.keys(pointMap)
+        .map(k => Object.assign({ studentId: k }, pointMap[k]))
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 3);
+      const totalRewardPoints = monthRewards.reduce((s, r) => s + (Number(r.points) || 0), 0);
+
+      html += `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🏅 本月奖励榜</div>
+            <button class="btn btn-sm btn-outline" onclick="navigateTo('rewards')">详情 ›</button>
+          </div>
+          <div style="font-size:12px;color:var(--gray-500);margin-bottom:4px;">
+            共 ${monthRewards.length} 次奖励 · 发放 ${totalRewardPoints} 积分
+          </div>
+      `;
+      top.forEach((item, i) => {
+        const badgeCls = i === 0 ? 'gold' : i === 1 ? 'silver' : 'bronze';
+        html += `
+          <div class="rank-row" onclick="navigateTo('rewards')">
+            <div class="rank-badge ${badgeCls}">${i + 1}</div>
+            <div class="rank-name">${item.name}</div>
+            <div class="rank-pts">${item.points}</div>
+            <div style="font-size:12px;color:var(--gray-400);width:40px;text-align:right;">${item.count}次</div>
+          </div>
+        `;
+      });
+      html += '</div>';
     }
 
     // 今日待办

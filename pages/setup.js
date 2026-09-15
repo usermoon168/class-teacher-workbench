@@ -90,7 +90,7 @@ const DataSetup = {
     const moduleKeys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'rewards', 'evalPlans'];
 
     // 1. 删除其他三个班级的所有数据（保留 class_2 与无 classId 的共享数据）
     moduleKeys.forEach(k => {
@@ -147,7 +147,7 @@ const DataSetup = {
     const moduleKeys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'rewards', 'evalPlans'];
     moduleKeys.forEach(k => {
       const data = DB.get(k) || [];
       const filtered = data.filter(it => !removeIds.includes(it.classId));
@@ -262,7 +262,7 @@ const DataSetup = {
     const moduleKeys = ['students', 'exams', 'grades', 'discipline', 'homework', 'homeworkRecords',
       'leaves', 'worklogs', 'talks', 'seating', 'parents', 'homeVisits', 'parentMeetings',
       'groupNotices', 'activities', 'awards', 'dutyRoster', 'todos', 'notes', 'reminders',
-      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords'];
+      'attendance', 'meetingReports', 'countdowns', 'randomCallRecords', 'rewards', 'evalPlans'];
     // 1. 兜底清理其他三个班级的残留数据
     moduleKeys.forEach(k => {
       const data = DB.get(k) || [];

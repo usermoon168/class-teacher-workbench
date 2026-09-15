@@ -81,6 +81,7 @@ const App = {
       students: () => StudentsPage.render(),
       grades: () => GradesPage.render(),
       discipline: () => DisciplinePage.render(),
+      rewards: () => RewardsPage.render(),
       homework: () => HomeworkPage.render(),
       leave: () => LeavePage.render(),
       worklog: () => WorklogPage.render(),
