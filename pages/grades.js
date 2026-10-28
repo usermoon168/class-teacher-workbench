@@ -1,6 +1,70 @@
 /**
  * 成绩分析页面
  */
+
+// ========== 各科满分 ==========
+// 初中语数英通常 120 分，其余科目 100 分。
+// 旧数据只存了统一的 fullScore，这里按科目名给出默认值，
+// 避免历史考试被错误地按 100 分制分析（120 分制的卷子会被算错及格率/优秀率）。
+const CORE_SUBJECTS_120 = ['语文', '数学', '英语'];
+const DEFAULT_CORE_FULL_SCORE = 120;
+const DEFAULT_SUBJECT_FULL_SCORE = 100;
+const PASS_RATE = 0.6;      // 及格线：满分的 60%
+const EXCELLENT_RATE = 0.85; // 优秀线：满分的 85%
+
+// 按科目名推断默认满分（支持「语文」「数学」「英语」及其带前缀的写法）
+function getDefaultFullScore(subject) {
+  const s = String(subject || '').trim();
+  return CORE_SUBJECTS_120.some(c => s === c || s.includes(c))
+    ? DEFAULT_CORE_FULL_SCORE
+    : DEFAULT_SUBJECT_FULL_SCORE;
+}
+
+// 取该场考试「科目 -> 满分」的映射，缺失科目自动补默认值
+function getExamFullScoreMap(exam) {
+  const map = {};
+  if (!exam) return map;
+  const saved = exam.subjectFullScores || null;
+  (exam.subjects || []).forEach(sub => {
+    const savedVal = saved ? Number(saved[sub]) : 0;
+    map[sub] = savedVal > 0 ? savedVal : getDefaultFullScore(sub);
+  });
+  return map;
+}
+
+// 单科满分
+function getSubjectFullScore(exam, subject) {
+  const map = getExamFullScoreMap(exam);
+  return map[subject] || Number(exam && exam.fullScore) || DEFAULT_SUBJECT_FULL_SCORE;
+}
+
+// 整场考试的总分满分（各科满分之和）
+function getExamFullTotal(exam) {
+  const map = getExamFullScoreMap(exam);
+  return (exam && exam.subjects ? exam.subjects : []).reduce((sum, s) => sum + (map[s] || 0), 0);
+}
+
+// 单科得分率（0~1）
+function getScoreRate(score, fullScore) {
+  const f = Number(fullScore) || 0;
+  if (f <= 0) return 0;
+  return Math.max(0, Number(score) || 0) / f;
+}
+
+// 学生的平均得分率（跳过缺考科目），用于跨科目（满分不同）的公平比较
+function getStudentRate(grade, exam) {
+  if (!grade || !exam) return 0;
+  const absent = new Set(grade.absentSubjects || []);
+  let sum = 0;
+  let n = 0;
+  (exam.subjects || []).forEach(sub => {
+    if (absent.has(sub)) return;
+    sum += getScoreRate((grade.scores || {})[sub], getSubjectFullScore(exam, sub));
+    n++;
+  });
+  return n > 0 ? sum / n : 0;
+}
+
 const GradesPage = {
   currentExamId: '',
   currentTab: 'overview',
@@ -54,6 +118,19 @@ const GradesPage = {
     const exam = exams.find(e => e.id === this.currentExamId);
     const grades = DB.getByClass('grades').filter(g => g.examId === this.currentExamId);
 
+    // 满分口径提示：让老师一眼确认当前按什么分制在分析
+    if (exam) {
+      const fullMap = getExamFullScoreMap(exam);
+      const parts = (exam.subjects || []).map(s => `${s} ${fullMap[s]}`).join(' · ');
+      html += `
+        <div class="score-scale-hint">
+          <span class="score-scale-label">本次考试满分</span>
+          <span class="score-scale-text">${parts}</span>
+          <span class="score-scale-total">总分 ${getExamFullTotal(exam)}</span>
+        </div>
+      `;
+    }
+
     if (grades.length === 0) {
       html += Utils.emptyState('📝', '该考试暂无成绩，点击"录入成绩"开始');
       document.getElementById('mainContent').innerHTML = html;
@@ -75,11 +152,16 @@ const GradesPage = {
 
     if (this.currentTab === 'overview') {
       const totals = grades.map(g => g.total);
+      const fullTotal = getExamFullTotal(exam);
       const avg = Utils.average(totals).toFixed(1);
       const max = Math.max(...totals);
       const min = Math.min(...totals);
-      const passCount = grades.filter(g => g.average >= 60).length;
-      const excellentCount = grades.filter(g => g.average >= 85).length;
+      // 及格/优秀改按「得分率」判定：各科满分不一致（语数英 120、其余 100），
+      // 用固定的 60/85 分线会把 120 分卷的及格线算低、优秀线算高
+      const rates = grades.map(g => getStudentRate(g, exam));
+      const passCount = rates.filter(r => r >= PASS_RATE).length;
+      const excellentCount = rates.filter(r => r >= EXCELLENT_RATE).length;
+      const avgRate = (Utils.average(rates) * 100).toFixed(1);
       const stdDev = Math.sqrt(Utils.average(totals.map(t => Math.pow(t - avg, 2)))).toFixed(1);
 
       html += `
@@ -90,7 +172,11 @@ const GradesPage = {
           </div>
           <div class="stat-card info">
             <div class="stat-value">${avg}</div>
-            <div class="stat-label">班级均分</div>
+            <div class="stat-label">班级均分（满分 ${fullTotal}）</div>
+          </div>
+          <div class="stat-card primary">
+            <div class="stat-value">${avgRate}%</div>
+            <div class="stat-label">平均得分率</div>
           </div>
           <div class="stat-card success">
             <div class="stat-value">${max}</div>
@@ -123,7 +209,7 @@ const GradesPage = {
       html += `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">📊 各科平均分</div>
+            <div class="card-title">📊 各科平均得分率（各科满分不同，按得分率对比）</div>
           </div>
           <div class="chart-container large">
             <canvas id="subjectAvgChart"></canvas>
@@ -143,9 +229,10 @@ const GradesPage = {
         </div>
       `;
     } else if (this.currentTab === 'ranking') {
+      const fullMap = getExamFullScoreMap(exam);
       html += '<div class="card" style="padding:0;"><div class="table-wrapper"><table class="data-table"><thead><tr><th>排名</th><th>姓名</th>';
-      exam.subjects.forEach(s => html += `<th>${s}</th>`);
-      html += '<th>总分</th><th>均分</th></tr></thead><tbody>';
+      exam.subjects.forEach(s => html += `<th>${s}<span class="th-full">/${fullMap[s]}</span></th>`);
+      html += '<th>总分</th><th>得分率</th></tr></thead><tbody>';
       sortedGrades.forEach(g => {
         const rankClass = g.rank <= 5 ? 'text-success' : g.rank <= 15 ? '' : g.rank >= grades.length - 4 ? 'text-danger' : '';
         const absentSet = new Set(g.absentSubjects || []);
@@ -154,12 +241,15 @@ const GradesPage = {
           if (absentSet.has(s)) {
             html += `<td style="color:var(--gray-400);font-style:italic;">缺考</td>`;
           } else {
-            const score = g.scores[s] || 0;
-            const color = score >= 80 ? 'var(--success)' : score >= 60 ? '' : 'var(--danger)';
-            html += `<td style="color:${color};font-weight:${score >= 80 || score < 60 ? '600' : '400'};">${score}</td>`;
+            const score = (g.scores || {})[s] || 0;
+            // 颜色按得分率判断，避免 120 分制科目里 100 分被误标成普通分
+            const rate = getScoreRate(score, fullMap[s]);
+            const color = rate >= 0.8 ? 'var(--success)' : rate >= PASS_RATE ? '' : 'var(--danger)';
+            html += `<td style="color:${color};font-weight:${rate >= 0.8 || rate < PASS_RATE ? '600' : '400'};">${score}</td>`;
           }
         });
-        html += `<td style="font-weight:700;">${g.total}</td><td>${g.average}</td></tr>`;
+        const rateVal = (getStudentRate(g, exam) * 100).toFixed(1);
+        html += `<td style="font-weight:700;">${g.total}</td><td>${rateVal}%</td></tr>`;
       });
       html += '</tbody></table></div></div>';
     } else if (this.currentTab === 'subject') {
@@ -173,23 +263,14 @@ const GradesPage = {
         <div id="subjectAnalysisContainer"></div>
       `;
     } else if (this.currentTab === 'distribution') {
-      // 总分分布
-      const ranges = [
-        { label: '0-59', min: 0, max: 59, color: '#ef4444' },
-        { label: '60-69', min: 60, max: 69, color: '#f59e0b' },
-        { label: '70-79', min: 70, max: 79, color: '#0ea5e9' },
-        { label: '80-89', min: 80, max: 89, color: '#10b981' },
-        { label: '90-100', min: 90, max: 100, color: '#4f46e5' }
-      ];
-
-      const maxTotal = Math.max(...grades.map(g => g.total));
-      const totalRanges = [
-        { label: '0-40%', min: 0, max: maxTotal * 0.4 },
-        { label: '40-60%', min: maxTotal * 0.4, max: maxTotal * 0.6 },
-        { label: '60-80%', min: maxTotal * 0.6, max: maxTotal * 0.8 },
-        { label: '80-90%', min: maxTotal * 0.8, max: maxTotal * 0.9 },
-        { label: '90-100%', min: maxTotal * 0.9, max: maxTotal }
-      ];
+      // 总分分数段由 renderDistributionChart 按「各科满分之和」统一计算
+      html += `
+        <div class="score-scale-hint" style="margin-bottom:10px;">
+          <span class="score-scale-label">总分满分</span>
+          <span class="score-scale-total">${getExamFullTotal(exam)} 分</span>
+          <span class="score-scale-text">（各科满分之和，分数段按此基准划分）</span>
+        </div>
+      `;
 
       html += `
         <div class="card">
@@ -202,7 +283,7 @@ const GradesPage = {
         </div>
         <div class="card">
           <div class="card-header">
-            <div class="card-title">📊 成绩雷达图（前5名 vs 班级均分）</div>
+            <div class="card-title">📊 成绩雷达图（前5名 vs 班级，按得分率）</div>
           </div>
           <div class="chart-container large">
             <canvas id="radarChart"></canvas>
@@ -236,19 +317,25 @@ const GradesPage = {
   },
 
   renderSubjectAvgChart(exam, grades) {
+    const fullMap = getExamFullScoreMap(exam);
+    // 各科满分不一致，直接比原始平均分对 100 分制的科目不公平，
+    // 因此图表看「平均得分率」，原始均分放进 tooltip
     const subjectAvgs = exam.subjects.map(s => {
-      const scores = grades.map(g => g.scores[s] || 0);
-      return Utils.average(scores).toFixed(1);
+      const scores = grades.map(g => (g.scores || {})[s] || 0);
+      return Utils.average(scores);
     });
+    const subjectRates = exam.subjects.map((s, i) =>
+      Number((getScoreRate(subjectAvgs[i], fullMap[s]) * 100).toFixed(1))
+    );
 
     Utils.destroyChart('subjectAvgChart');
     new Chart(document.getElementById('subjectAvgChart'), {
       type: 'bar',
       data: {
-        labels: exam.subjects,
+        labels: exam.subjects.map(s => `${s}(${fullMap[s]}分)`),
         datasets: [{
-          label: '平均分',
-          data: subjectAvgs,
+          label: '平均得分率(%)',
+          data: subjectRates,
           backgroundColor: Utils.chartColors,
           borderRadius: 6
         }]
@@ -256,15 +343,32 @@ const GradesPage = {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: true, max: 100 } }
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const i = ctx.dataIndex;
+                return `均分 ${subjectAvgs[i].toFixed(1)} / ${fullMap[exam.subjects[i]]}（${subjectRates[i]}%）`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, max: 100, title: { display: true, text: '得分率(%)' } }
+        }
       }
     });
   },
 
   renderPassRateChart(exam, grades) {
+    const fullMap = getExamFullScoreMap(exam);
     const passRates = exam.subjects.map(s => {
-      const passed = grades.filter(g => (g.scores[s] || 0) >= 60).length;
+      // 及格线按各科满分的 60% 计算：语数英 120 分对应 72 分
+      const passed = grades.filter(g => {
+        if ((g.absentSubjects || []).includes(s)) return false;
+        return getScoreRate((g.scores || {})[s], fullMap[s]) >= PASS_RATE;
+      }).length;
       return (passed / grades.length * 100).toFixed(0);
     });
 
@@ -294,39 +398,57 @@ const GradesPage = {
     if (!select) return;
     const subject = select.value;
     const exam = DB.getByClass('exams').find(e => e.id === this.currentExamId);
+    if (!exam) return;
     const grades = DB.getByClass('grades').filter(g => g.examId === this.currentExamId);
-    const scores = grades.map(g => g.scores[subject] || 0);
+    const fullScore = getSubjectFullScore(exam, subject);
+    const passLine = fullScore * PASS_RATE;
+    const excellentLine = fullScore * EXCELLENT_RATE;
+    // 缺考不计入统计，否则 0 分会把均分和及格率拉低
+    const scores = grades
+      .filter(g => !(g.absentSubjects || []).includes(subject))
+      .map(g => (g.scores || {})[subject] || 0);
+
+    if (scores.length === 0) {
+      document.getElementById('subjectAnalysisContainer').innerHTML =
+        Utils.emptyState('📝', `${subject}暂无有效成绩`);
+      return;
+    }
 
     const avg = Utils.average(scores).toFixed(1);
     const max = Math.max(...scores);
     const min = Math.min(...scores);
-    const passCount = scores.filter(s => s >= 60).length;
-    const excellentCount = scores.filter(s => s >= 85).length;
+    const passCount = scores.filter(s => s >= passLine).length;
+    const excellentCount = scores.filter(s => s >= excellentLine).length;
+    const avgRate = (getScoreRate(avg, fullScore) * 100).toFixed(1);
 
+    // 分数段按满分等比例切分：120 分制即 0-71 / 72-83 / 84-95 / 96-107 / 108-120
+    const step = fullScore / 5;
     const ranges = [
-      { label: '0-59', count: 0, color: '#ef4444' },
-      { label: '60-69', count: 0, color: '#f59e0b' },
-      { label: '70-79', count: 0, color: '#0ea5e9' },
-      { label: '80-89', count: 0, color: '#10b981' },
-      { label: '90-100', count: 0, color: '#4f46e5' }
+      { label: `0-${Math.ceil(step) - 1}`, count: 0, color: '#ef4444' },
+      { label: `${Math.ceil(step)}-${Math.ceil(step * 2) - 1}`, count: 0, color: '#f59e0b' },
+      { label: `${Math.ceil(step * 2)}-${Math.ceil(step * 3) - 1}`, count: 0, color: '#0ea5e9' },
+      { label: `${Math.ceil(step * 3)}-${Math.ceil(step * 4) - 1}`, count: 0, color: '#10b981' },
+      { label: `${Math.ceil(step * 4)}-${fullScore}`, count: 0, color: '#4f46e5' }
     ];
     scores.forEach(s => {
-      if (s < 60) ranges[0].count++;
-      else if (s < 70) ranges[1].count++;
-      else if (s < 80) ranges[2].count++;
-      else if (s < 90) ranges[3].count++;
+      if (s < step) ranges[0].count++;
+      else if (s < step * 2) ranges[1].count++;
+      else if (s < step * 3) ranges[2].count++;
+      else if (s < step * 4) ranges[3].count++;
       else ranges[4].count++;
     });
 
     let html = `
       <div class="stat-grid">
-        <div class="stat-card info"><div class="stat-value">${avg}</div><div class="stat-label">平均分</div></div>
+        <div class="stat-card info"><div class="stat-value">${avg}</div><div class="stat-label">平均分（满分 ${fullScore}）</div></div>
+        <div class="stat-card primary"><div class="stat-value">${avgRate}%</div><div class="stat-label">平均得分率</div></div>
         <div class="stat-card success"><div class="stat-value">${max}</div><div class="stat-label">最高分</div></div>
         <div class="stat-card danger"><div class="stat-value">${min}</div><div class="stat-label">最低分</div></div>
-        <div class="stat-card warning"><div class="stat-value">${(passCount/scores.length*100).toFixed(0)}%</div><div class="stat-label">及格率</div></div>
+        <div class="stat-card warning"><div class="stat-value">${(passCount/scores.length*100).toFixed(0)}%</div><div class="stat-label">及格率（≥${Number(passLine.toFixed(1))}分）</div></div>
+        <div class="stat-card success"><div class="stat-value">${(excellentCount/scores.length*100).toFixed(0)}%</div><div class="stat-label">优秀率（≥${Number(excellentLine.toFixed(1))}分）</div></div>
       </div>
       <div class="card">
-        <div class="card-header"><div class="card-title">📊 ${subject}分数段分布</div></div>
+        <div class="card-header"><div class="card-title">📊 ${subject}分数段分布（满分 ${fullScore}）</div></div>
         <div class="chart-container large"><canvas id="subjectDistChart"></canvas></div>
       </div>
     `;
@@ -354,7 +476,9 @@ const GradesPage = {
   },
 
   renderDistributionChart(grades, exam) {
-    const maxTotal = Math.max(...grades.map(g => g.total));
+    // 满分基准必须用「各科满分之和」，不能用本班最高总分——
+    // 拿最高分当满分时，全班都会被算成中上水平，看不出真实分布
+    const maxTotal = getExamFullTotal(exam) || Math.max(...grades.map(g => g.total)) || 100;
     const ranges = [
       { label: '0-40%', count: 0 },
       { label: '40-60%', count: 0 },
@@ -393,30 +517,30 @@ const GradesPage = {
 
   renderRadarChart(exam, sortedGrades) {
     const top5 = sortedGrades.slice(0, 5);
-    const avgScores = exam.subjects.map(s => {
-      const scores = sortedGrades.map(g => g.scores[s] || 0);
-      return Utils.average(scores).toFixed(1);
+    const fullMap = getExamFullScoreMap(exam);
+    // 雷达图按得分率(0-100)绘制，否则 120 分的科目会顶出 100 的坐标轴
+    const toRates = (list) => exam.subjects.map(s => {
+      const scores = list.map(g => (g.scores || {})[s] || 0);
+      return Number((getScoreRate(Utils.average(scores), fullMap[s]) * 100).toFixed(1));
     });
-    const top5Avg = exam.subjects.map(s => {
-      const scores = top5.map(g => g.scores[s] || 0);
-      return Utils.average(scores).toFixed(1);
-    });
+    const avgScores = toRates(sortedGrades);
+    const top5Avg = toRates(top5);
 
     Utils.destroyChart('radarChart');
     new Chart(document.getElementById('radarChart'), {
       type: 'radar',
       data: {
-        labels: exam.subjects,
+        labels: exam.subjects.map(s => `${s}(${fullMap[s]})`),
         datasets: [
           {
-            label: '前5名均分',
+            label: '前5名得分率(%)',
             data: top5Avg,
             borderColor: '#4f46e5',
             backgroundColor: 'rgba(79,70,229,0.1)',
             pointRadius: 4
           },
           {
-            label: '班级均分',
+            label: '班级得分率(%)',
             data: avgScores,
             borderColor: '#10b981',
             backgroundColor: 'rgba(16,185,129,0.1)',
@@ -444,15 +568,19 @@ const GradesPage = {
       return;
     }
     const sorted = [...grades].sort((a, b) => a.rank - b.rank);
-    const headers = ['排名', '姓名', '学号', ...exam.subjects, '总分', '平均分'];
-    const data = sorted.map(g => ({
-      排名: g.rank,
-      姓名: g.studentName,
-      学号: g.studentNo || '',
-      ...g.scores,
-      总分: g.total,
-      平均分: g.average
-    }));
+    const fullMap = getExamFullScoreMap(exam);
+    const fullTotal = getExamFullTotal(exam);
+    // 表头带满分，导出的表格拿给家长/同事看时不会误判分数水平
+    const subjHeaders = exam.subjects.map(s => `${s}(${fullMap[s]})`);
+    const totalHeader = `总分(${fullTotal})`;
+    const headers = ['排名', '姓名', '学号', ...subjHeaders, totalHeader, '得分率(%)'];
+    const data = sorted.map(g => {
+      const row = { 排名: g.rank, 姓名: g.studentName, 学号: g.studentNo || '' };
+      exam.subjects.forEach(s => { row[`${s}(${fullMap[s]})`] = (g.scores || {})[s] ?? ''; });
+      row[totalHeader] = g.total;
+      row['得分率(%)'] = (getStudentRate(g, exam) * 100).toFixed(1);
+      return row;
+    });
     const csv = Utils.toCSV(data, headers);
     Utils.downloadFile(`${exam.name}_成绩表.csv`, '\ufeff' + csv, 'text/csv');
     Utils.toast('成绩表已导出', 'success');
@@ -475,17 +603,57 @@ function showExamModal(id) {
       <input class="form-input" id="examDate" type="date" value="${exam?.date || Utils.today()}">
     </div>
     <div class="form-group">
-      <label class="form-label">满分分值</label>
-      <input class="form-input" id="examFullScore" type="number" value="${exam?.fullScore || 100}" placeholder="单科满分">
+      <label class="form-label">考试科目（用逗号分隔）</label>
+      <input class="form-input" id="examSubjects" value="${subjects.join(',')}" placeholder="如：语文,数学,英语"
+             onchange="renderExamFullScoreInputs()" onblur="renderExamFullScoreInputs()">
     </div>
     <div class="form-group">
-      <label class="form-label">考试科目（用逗号分隔）</label>
-      <input class="form-input" id="examSubjects" value="${subjects.join(',')}" placeholder="如：语文,数学,英语">
+      <label class="form-label">各科满分</label>
+      <div class="full-score-grid" id="examFullScoreGrid"></div>
+      <div class="form-hint">
+        语数英默认 <b>120</b> 分，其余科目默认 <b>100</b> 分。及格线 = 满分×60%，优秀线 = 满分×85%。
+        如果本次考试统一按 100 分制，请把各科都改成 100。
+      </div>
     </div>
   `, `
     <button class="btn btn-secondary" style="flex:1;" onclick="Utils.closeModal()">取消</button>
     <button class="btn btn-primary" style="flex:1;" onclick="saveExam(${isEdit ? `'${id}'` : 'null'})">保存</button>
   `);
+
+  renderExamFullScoreInputs();
+}
+
+// 根据科目输入框重建满分输入网格，保留用户已填的值
+function renderExamFullScoreInputs() {
+  const grid = document.getElementById('examFullScoreGrid');
+  const subjectInput = document.getElementById('examSubjects');
+  if (!grid || !subjectInput) return;
+
+  const subjects = subjectInput.value.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+
+  // 记录已填写过的值，避免改科目时把刚输入的数字冲掉
+  const existed = {};
+  grid.querySelectorAll('input[data-subject]').forEach(inp => {
+    existed[inp.dataset.subject] = inp.value;
+  });
+
+  if (subjects.length === 0) {
+    grid.innerHTML = '<div class="form-hint">请先填写考试科目</div>';
+    return;
+  }
+
+  grid.innerHTML = subjects.map(sub => {
+    const val = existed[sub] !== undefined && existed[sub] !== ''
+      ? existed[sub]
+      : getDefaultFullScore(sub);
+    const safe = Utils.escapeHtml(sub);
+    return `
+      <div class="full-score-item">
+        <span class="full-score-subject">${safe}</span>
+        <input type="number" class="form-input" data-subject="${safe}" value="${val}" min="1" max="300" step="1">
+      </div>
+    `;
+  }).join('');
 }
 
 function saveExam(id) {
@@ -494,12 +662,30 @@ function saveExam(id) {
     Utils.toast('请输入考试名称', 'error');
     return;
   }
-  const subjects = document.getElementById('examSubjects').value.split(',').map(s => s.trim()).filter(s => s);
+  const subjects = document.getElementById('examSubjects').value
+    .split(/[,，、]/).map(s => s.trim()).filter(s => s);
+  if (subjects.length === 0) {
+    Utils.toast('请至少填写一个科目', 'error');
+    return;
+  }
+
+  // 逐科收集满分；未填的按默认值兜底
+  const subjectFullScores = {};
+  document.querySelectorAll('#examFullScoreGrid input[data-subject]').forEach(inp => {
+    const v = parseInt(inp.value, 10);
+    subjectFullScores[inp.dataset.subject] = v > 0 ? v : getDefaultFullScore(inp.dataset.subject);
+  });
+  subjects.forEach(sub => {
+    if (!subjectFullScores[sub]) subjectFullScores[sub] = getDefaultFullScore(sub);
+  });
+
   const data = {
     name: name,
     date: document.getElementById('examDate').value,
-    fullScore: parseInt(document.getElementById('examFullScore').value) || 100,
-    subjects: subjects
+    // fullScore 保留为「单科最大满分」，仅为兼容旧数据读取
+    fullScore: Math.max(...Object.values(subjectFullScores), 100),
+    subjects: subjects,
+    subjectFullScores: subjectFullScores
   };
   if (id) {
     DB.update('exams', id, data);
@@ -576,14 +762,16 @@ function showGradeEntryModal() {
       <div style="margin-bottom:12px;padding:8px;background:var(--gray-50);border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">${s.name}</div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">
-          ${exam.subjects.map(subj => `
+          ${exam.subjects.map(subj => {
+            const fs = getSubjectFullScore(exam, subj);
+            return `
             <div>
-              <label style="font-size:11px;color:var(--gray-500);">${subj}</label>
+              <label style="font-size:11px;color:var(--gray-500);">${subj} <span style="color:var(--gray-400);">/ ${fs}</span></label>
               <input type="number" class="form-input" style="padding:4px 8px;font-size:13px;" 
-                id="grade_${s.id}_${subj}" value="${existing?.scores[subj] ?? ''}" 
-                placeholder="${subj}" min="0" max="${exam.fullScore}">
+                id="grade_${s.id}_${subj}" value="${existing?.scores?.[subj] ?? ''}" 
+                placeholder="满分${fs}" min="0" max="${fs}">
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
       </div>
     `;
@@ -610,6 +798,7 @@ function saveGrades() {
   const allGrades = DB.get('grades') || [];
 
   let count = 0;
+  let overCount = 0;
   const newGrades = [];
 
   students.forEach(s => {
@@ -623,6 +812,8 @@ function saveGrades() {
         hasScore = true;
         scores[subj] = val;
         total += val;
+        // 超出该科满分只提示不阻断：老师可能就是要记附加分，或分制没设对
+        if (val > getSubjectFullScore(exam, subj)) overCount++;
       } else {
         scores[subj] = 0;
       }
@@ -661,7 +852,11 @@ function saveGrades() {
 
   Utils.closeModal();
   GradesPage.render();
-  Utils.toast(`已保存 ${count} 名学生成绩`, 'success');
+  if (overCount > 0) {
+    Utils.toast(`已保存 ${count} 名学生成绩，其中 ${overCount} 科分数超出满分，请核对分制设置`, 'warning', 4000);
+  } else {
+    Utils.toast(`已保存 ${count} 名学生成绩`, 'success');
+  }
 }
 
 // ========== 批量导入成绩 ==========
@@ -717,12 +912,17 @@ function downloadGradeTemplate() {
   const students = DB.getByClass('students');
 
   // 模板含表头 + 示例学生（姓名+学号预填，成绩留空）
-  let csv = '姓名,学号,' + subjects.join(',') + '\n';
+  // 表头带该科满分，避免老师填分时按错分制
+  const colHeaders = subjects.map(s => {
+    const fs = exam ? getSubjectFullScore(exam, s) : getDefaultFullScore(s);
+    return `${s}(${fs})`;
+  });
+  let csv = '姓名,学号,' + colHeaders.join(',') + '\n';
   students.slice(0, 5).forEach(s => {
     csv += `${s.name},${s.studentNo || ''},${subjects.map(() => '').join(',')}\n`;
   });
-  csv += `张三,2024001,${subjects.map((_, i) => 80 + i).join(',')}\n`;
-  csv += `李四,2024002,${subjects.map((_, i) => 75 + i).join(',')}\n`;
+  csv += `张三,2024001,${subjects.map((s, i) => Math.round((exam ? getSubjectFullScore(exam, s) : 100) * 0.8) + i).join(',')}\n`;
+  csv += `李四,2024002,${subjects.map((s, i) => Math.round((exam ? getSubjectFullScore(exam, s) : 100) * 0.75) + i).join(',')}\n`;
 
   Utils.downloadFile(`成绩导入模板_${exam ? exam.name : ''}.csv`, '\ufeff' + csv, 'text/csv');
   Utils.toast('模板已下载', 'success');
@@ -779,9 +979,15 @@ function parseGradeImport(event) {
       }
 
       // 识别科目列：优先精确匹配考试科目，其次取非姓名/学号的数字列
+      // 兼容模板里的「语文(120)」这类带满分的表头写法
       const subjectCols = [];
+      const normHeader = h => String(h || '').replace(/[\s\u3000]/g, '');
       exam.subjects.forEach(subj => {
-        const col = headers.find(h => h.trim() === subj.trim());
+        const target = normHeader(subj);
+        const col = headers.find(h => {
+          const k = normHeader(h);
+          return k === target || k.startsWith(target + '(') || k.startsWith(target + '（');
+        });
         if (col) subjectCols.push({ subject: subj, col: col });
       });
 
@@ -827,6 +1033,7 @@ function parseGradeImport(event) {
         const scores = {};
         let total = 0;
         let hasScore = false;
+        const overLimit = [];
         subjectCols.forEach(sc => {
           const rawVal = (row[sc.col] || '').trim();
           const val = rawVal === '' ? 0 : parseFloat(rawVal);
@@ -836,6 +1043,9 @@ function parseGradeImport(event) {
             scores[sc.subject] = val;
             if (rawVal !== '') hasScore = true;
             total += val;
+            // 超出该科满分时记一笔，预览里提示（不阻断，方便老师核对）
+            const fs = getSubjectFullScore(exam, sc.subject);
+            if (val > fs) overLimit.push(`${sc.subject} ${val}/${fs}`);
           }
         });
 
@@ -848,7 +1058,8 @@ function parseGradeImport(event) {
           scores: scores,
           total: total,
           average: (total / subjectCols.length).toFixed(1),
-          subjects: subjectCols.map(sc => sc.subject)
+          subjects: subjectCols.map(sc => sc.subject),
+          overLimit: overLimit
         });
       });
 
@@ -858,12 +1069,25 @@ function parseGradeImport(event) {
       let previewHtml = '';
       if (parsed.length > 0) {
         const subjList = parsed[0].subjects;
+        const fullMap = getExamFullScoreMap(exam);
         previewHtml += `
           <div style="margin-top:12px;padding:10px;background:var(--primary-bg);border-radius:8px;font-size:13px;">
             ✅ 解析成功：<strong>${parsed.length}</strong> 条成绩记录<br>
-            📚 科目：${subjList.join('、')}
+            📚 科目：${subjList.map(s => `${s}(${fullMap[s]}分)`).join('、')}<br>
+            🎯 及格线：${subjList.map(s => `${s} ${Number((fullMap[s] * PASS_RATE).toFixed(1))}`).join('、')}
           </div>
         `;
+
+        // 超出满分的成绩单列出来，方便核对（不阻断导入）
+        const overRows = parsed.filter(p => p.overLimit && p.overLimit.length > 0);
+        if (overRows.length > 0) {
+          previewHtml += `
+            <div style="margin-top:8px;padding:10px;background:#fef3c7;border-radius:8px;font-size:12px;color:#92400e;">
+              ⚠️ 有 ${overRows.length} 名学生的成绩超过该科满分，请核对：<br>
+              ${overRows.slice(0, 5).map(p => `${p.studentName}（${p.overLimit.join('、')}）`).join('；')}${overRows.length > 5 ? '...' : ''}
+            </div>
+          `;
+        }
 
         // 未匹配学生
         if (unmatched.length > 0) {
@@ -883,16 +1107,18 @@ function parseGradeImport(event) {
               <table class="data-table">
                 <thead><tr><th>姓名</th>
         `;
-        subjList.forEach(s => previewHtml += `<th>${s}</th>`);
+        subjList.forEach(s => previewHtml += `<th>${s}<span class="th-full">/${fullMap[s]}</span></th>`);
         previewHtml += `<th>总分</th></tr></thead><tbody>`;
         parsed.slice(0, 5).forEach(p => {
           previewHtml += `<tr><td>${p.studentName}</td>`;
           subjList.forEach(s => {
             const score = p.scores[s];
-            const color = score >= 80 ? 'var(--success)' : score >= 60 ? '' : 'var(--danger)';
-            previewHtml += `<td style="color:${color};font-weight:${score >= 80 || score < 60 ? '600' : '400'};">${score}</td>`;
+            const rate = getScoreRate(score, fullMap[s]);
+            const color = rate >= 0.8 ? 'var(--success)' : rate >= PASS_RATE ? '' : 'var(--danger)';
+            previewHtml += `<td style="color:${color};font-weight:${rate >= 0.8 || rate < PASS_RATE ? '600' : '400'};">${score}</td>`;
           });
-          previewHtml += `<td style="font-weight:700;">${p.total}</td></tr>`;
+          const fullTotal = getExamFullTotal(exam);
+          previewHtml += `<td style="font-weight:700;">${p.total}<span class="th-full">/${fullTotal}</span></td></tr>`;
         });
         previewHtml += '</tbody></table></div>';
         if (parsed.length > 5) {

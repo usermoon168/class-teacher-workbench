@@ -31,7 +31,10 @@ const DashboardPage = {
     const latestGrades = latestExam ? grades.filter(g => g.examId === latestExam.id) : [];
     const classAvg = latestGrades.length > 0 ? (Utils.average(latestGrades.map(g => g.total))).toFixed(1) : '-';
     const maxScore = latestGrades.length > 0 ? Math.max(...latestGrades.map(g => g.total)) : '-';
-    const passRate = latestGrades.length > 0 ? (latestGrades.filter(g => g.average >= 60).length / latestGrades.length * 100).toFixed(0) : '-';
+    // 及格率按得分率判定（各科满分可能不同，语数英 120、其余 100）
+    const passRate = latestGrades.length > 0
+      ? (latestGrades.filter(g => getStudentRate(g, latestExam) >= PASS_RATE).length / latestGrades.length * 100).toFixed(0)
+      : '-';
 
     let html = `
       <div class="page-title">📊 ${cls.name} · 仪表盘</div>
@@ -188,7 +191,7 @@ const DashboardPage = {
           <div class="stat-grid">
             <div class="stat-card info">
               <div class="stat-value">${classAvg}</div>
-              <div class="stat-label">班级均分</div>
+              <div class="stat-label">班级均分${latestExam ? `（满分 ${getExamFullTotal(latestExam)}）` : ''}</div>
             </div>
             <div class="stat-card success">
               <div class="stat-value">${maxScore}</div>

@@ -208,16 +208,21 @@ const StudentsPage = {
                 <span class="tag tag-${g.rank <= 5 ? 'success' : g.rank <= 15 ? 'warning' : 'gray'}">第${g.rank}名</span>
               </div>
               <div class="stat-grid">
-                <div class="stat-card"><div class="stat-value">${g.total}</div><div class="stat-label">总分</div></div>
-                <div class="stat-card info"><div class="stat-value">${g.average}</div><div class="stat-label">平均分</div></div>
+                <div class="stat-card"><div class="stat-value">${g.total}<span class="th-full">/${exam ? getExamFullTotal(exam) : ''}</span></div><div class="stat-label">总分</div></div>
+                <div class="stat-card info"><div class="stat-value">${exam ? (getStudentRate(g, exam) * 100).toFixed(1) + '%' : g.average}</div><div class="stat-label">${exam ? '得分率' : '平均分'}</div></div>
               </div>
               <div style="margin-top:8px;">
-                ${Object.entries(g.scores || {}).map(([subj, score]) => `
+                ${Object.entries(g.scores || {}).map(([subj, score]) => {
+                  // 按该科满分判断颜色：语数英 120 分制和 100 分制不能用同一套分数线
+                  const full = exam ? getSubjectFullScore(exam, subj) : 100;
+                  const rate = full > 0 ? (Number(score) || 0) / full : 0;
+                  const color = rate >= 0.8 ? 'var(--success)' : rate >= 0.6 ? 'var(--warning)' : 'var(--danger)';
+                  return `
                   <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--gray-100);">
-                    <span style="color:var(--gray-600);">${subj}</span>
-                    <span style="font-weight:600;color:${score >= 80 ? 'var(--success)' : score >= 60 ? 'var(--warning)' : 'var(--danger)'};">${score}</span>
+                    <span style="color:var(--gray-600);">${subj} <span class="th-full">/${full}</span></span>
+                    <span style="font-weight:600;color:${color};">${score}</span>
                   </div>
-                `).join('')}
+                `}).join('')}
               </div>
             </div>
           `;
