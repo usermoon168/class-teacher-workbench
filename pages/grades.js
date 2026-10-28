@@ -29,19 +29,27 @@ const GradesPage = {
       return;
     }
 
+    // 保证 currentExamId 有效（可能尚未选择，或该场次刚被删除）
+    if (!this.currentExamId || !exams.some(e => e.id === this.currentExamId)) {
+      this.currentExamId = exams[exams.length - 1].id;
+    }
+
     html += `
       <div class="form-group">
         <label class="form-label">选择考试</label>
-        <select class="form-select" onchange="GradesPage.selectExam(this.value)">
+        <div class="exam-select-row">
+          <select class="form-select" onchange="GradesPage.selectExam(this.value)">
     `;
     exams.forEach(e => {
       html += `<option value="${e.id}" ${e.id === this.currentExamId ? 'selected' : ''}>${e.name} (${e.date})</option>`;
     });
-    html += '</select></div>';
-
-    if (!this.currentExamId) {
-      this.currentExamId = exams[exams.length - 1].id;
-    }
+    html += `
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="showExamModal('${this.currentExamId}')" title="修改考试名称、日期、科目">✏️ 编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteExam('${this.currentExamId}')" title="删除本次考试及其成绩">🗑 删除</button>
+        </div>
+      </div>
+    `;
 
     const exam = exams.find(e => e.id === this.currentExamId);
     const grades = DB.getByClass('grades').filter(g => g.examId === this.currentExamId);
@@ -502,6 +510,36 @@ function saveExam(id) {
   }
   Utils.closeModal();
   GradesPage.render();
+}
+
+// 删除考试场次（连同该场次下的所有成绩）
+function deleteExam(examId) {
+  const id = examId || GradesPage.currentExamId;
+  const exam = DB.getByClass('exams').find(e => e.id === id);
+  if (!exam) {
+    Utils.toast('未找到该考试', 'error');
+    return;
+  }
+
+  const gradeCount = DB.getByClass('grades').filter(g => g.examId === id).length;
+  const tip = gradeCount > 0
+    ? `确定删除考试「${exam.name}」吗？<br><br>该场次的 <b>${gradeCount}</b> 条成绩会一并删除，无法恢复。`
+    : `确定删除考试「${exam.name}」吗？`;
+
+  Utils.confirm(tip, () => {
+    // 先级联清掉该场次的成绩，避免留下无主的成绩记录
+    const gradeIds = (DB.get('grades') || []).filter(g => g.examId === id).map(g => g.id);
+    if (gradeIds.length > 0) DB.deleteBatch('grades', gradeIds);
+    DB.delete('exams', id);
+
+    // 切到剩下的考试（与 render 一致取最后一场）；全删完则回到空状态
+    const rest = DB.getByClass('exams');
+    GradesPage.currentExamId = rest.length > 0 ? rest[rest.length - 1].id : '';
+    GradesPage.currentTab = 'overview';
+
+    Utils.toast(gradeCount > 0 ? `已删除考试及 ${gradeCount} 条成绩` : '考试已删除', 'success');
+    GradesPage.render();
+  }, '删除考试');
 }
 
 // 成绩录入

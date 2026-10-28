@@ -2450,3 +2450,34 @@ hidden { display: none !important; }
   .mini-bar { display: none; }
   .pick-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
 }
+
+/* ========== 成绩分析 · 考试选择行 ========== */
+.exam-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.exam-select-row .form-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-select-row .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .exam-select-row {
+    flex-wrap: wrap;
+  }
+
+  .exam-select-row .form-select {
+    flex: 1 1 100%;
+  }
+
+  .exam-select-row .btn {
+    flex: 1 1 auto;
+  }
+}
