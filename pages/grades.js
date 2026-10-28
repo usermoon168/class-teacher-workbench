@@ -699,19 +699,36 @@ function parseGradeImport(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const rows = Utils.parseCSV(e.target.result);
+      // 按字节读取后自动识别编码：Excel 另存的 CSV 默认是 GBK/ANSI，
+      // 若强制按 UTF-8 读，中文表头会变成乱码，进而找不到「姓名」列
+      const rows = Utils.parseCSV(decodeCSVText(new Uint8Array(e.target.result)));
       if (rows.length === 0) {
         Utils.toast('文件为空或格式错误', 'error');
         return;
       }
 
-      // 识别科目列
+      // 识别姓名列（兼容 姓名/名字/学生姓名/name 等常见表头）
       const headers = Object.keys(rows[0]);
-      const nameKey = headers.find(h => h.includes('姓名') || h.toLowerCase() === 'name');
-      const noKey = headers.find(h => h.includes('学号') || h.toLowerCase().includes('no'));
+      const norm = h => String(h || '').replace(/[\s\u3000]/g, '');
+      const nameKey = headers.find(h => {
+        const k = norm(h);
+        return /姓名|名字/.test(k) || /^(name|student|studentname|学生|学生姓名)$/i.test(k);
+      });
+      const noKey = headers.find(h => {
+        const k = norm(h);
+        return /学号|学籍号|考号/.test(k) || /^(no|id|studentno|studentid|number)$/i.test(k);
+      });
 
       if (!nameKey) {
-        Utils.toast('未找到「姓名」列，请检查文件格式', 'error');
+        const sample = headers.slice(0, 6).map(h => (String(h).trim() === '' ? '(空列)' : h)).join(' / ');
+        const garbled = headers.some(h => /\uFFFD/.test(String(h)));
+        showGradeImportError(
+          garbled ? '中文表头显示为乱码，无法识别「姓名」列' : '未找到「姓名」列',
+          '文件里识别到的表头是：' + sample,
+          garbled
+            ? '这是文件编码问题：Excel 另存的 CSV 默认是 GBK 编码。请用 Excel 打开后「另存为 → CSV UTF-8（逗号分隔）」，或直接下载上方导入模板填写。'
+            : '请确认表头第一行包含「姓名」列。如果打开的是 Excel 工作簿（.xlsx），请先另存为 CSV 再导入。'
+        );
         return;
       }
 
@@ -870,7 +887,41 @@ function parseGradeImport(event) {
       Utils.toast('文件解析失败：' + err.message, 'error');
     }
   };
-  reader.readAsText(file, 'UTF-8');
+  // 按字节读取，交给 decodeCSVText 自动判断编码
+  reader.readAsArrayBuffer(file);
+}
+
+// 自动识别 CSV 编码：优先 UTF-8，出现替换字符（�）则回退 GBK
+// 说明：Excel 在中文系统里「另存为 CSV」默认写 GBK，模板被 Excel 保存后也会变成 GBK
+function decodeCSVText(bytes) {
+  const badCount = s => (s.match(/\uFFFD/g) || []).length;
+  const utf8 = new TextDecoder('utf-8').decode(bytes);
+  if (badCount(utf8) === 0) return utf8;
+
+  try {
+    const gbk = new TextDecoder('gbk').decode(bytes);
+    // 两种解码都不干净时，取乱码更少的那个
+    if (badCount(gbk) < badCount(utf8)) return gbk;
+  } catch (_) {
+    // 个别浏览器不支持 gbk 解码，保持 UTF-8 结果
+  }
+  return utf8;
+}
+
+// 在预览区显示可读的导入错误（比 toast 更能留住信息）
+function showGradeImportError(title, detail, hint) {
+  const area = document.getElementById('importPreviewArea');
+  if (area) {
+    const esc = s => Utils.escapeHtml(String(s == null ? '' : s));
+    area.innerHTML = `
+      <div style="margin-top:12px;padding:10px 12px;background:#fee2e2;border-radius:8px;font-size:13px;line-height:1.7;">
+        <div style="font-weight:600;color:#991b1b;">❌ ${esc(title)}</div>
+        ${detail ? `<div style="color:#7f1d1d;margin-top:4px;word-break:break-all;">${esc(detail)}</div>` : ''}
+        ${hint ? `<div style="color:var(--gray-600);margin-top:6px;">💡 ${esc(hint)}</div>` : ''}
+      </div>
+    `;
+  }
+  Utils.toast(title, 'error', 3500);
 }
 
 function confirmGradeImport() {
